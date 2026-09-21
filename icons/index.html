@@ -1,0 +1,1602 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" id="themeColorMeta" content="#f7f9fc" />
+  <link rel="icon" href="icons/train-front.svg" type="image/svg+xml" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./assets/pwa/icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="到站啦" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>到站啦 · 太原地铁前台提醒</title>
+  <script>
+    try {
+      const saved = JSON.parse(localStorage.getItem('daozhanla.preferences') || '{}');
+      const choice = saved.theme || 'system';
+      const dark = choice === 'dark' || (choice === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document.documentElement.dataset.themeChoice = choice;
+      document.getElementById('themeColorMeta')?.setAttribute('content', dark ? '#0c111b' : '#f7f9fc');
+    } catch {}
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182337;
+      --muted: #5f6e84;
+      --page: #edf2f8;
+      --page-accent: #edf2f8;
+      --app: #f7f9fc;
+      --surface: #ffffff;
+      --surface-soft: #eaf0f8;
+      --line: #d8e1ed;
+      --line-strong: #a6b6cd;
+      --blue: #285aa4;
+      --blue-soft: #e5edfa;
+      /* Keep existing component aliases within the blue palette. */
+      --green: var(--blue);
+      --green-soft: var(--blue-soft);
+      --orange: var(--metro-line);
+      --orange-soft: #e9eff9;
+      --danger: #b33e49;
+      --nav: rgba(247, 249, 252, .96);
+      --shadow: rgba(17, 34, 59, .08);
+      --primary: #244c83;
+      --primary-ink: #ffffff;
+      --metro-line: #43699f;
+      --hero-bg: #eaf0f8;
+      --hero-ink: #182337;
+      --hero-muted: #5f6e84;
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --ink: #f1f5fc;
+      --muted: #9aaac1;
+      --page: #070b12;
+      --page-accent: #070b12;
+      --app: #0c111b;
+      --surface: #121b29;
+      --surface-soft: #18263b;
+      --line: #26354c;
+      --line-strong: #4a6283;
+      --blue: #9bbcf0;
+      --blue-soft: rgba(155, 188, 240, .12);
+      --green: var(--blue);
+      --green-soft: var(--blue-soft);
+      --orange: var(--metro-line);
+      --orange-soft: rgba(115, 156, 224, .13);
+      --danger: #e69aa3;
+      --nav: rgba(12, 17, 27, .96);
+      --shadow: rgba(0, 0, 0, .4);
+      --primary: #264976;
+      --primary-ink: #f4f7fc;
+      --metro-line: #739ce0;
+      --hero-bg: #101b2b;
+      --hero-ink: #f1f5fc;
+      --hero-muted: #9aaac1;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--page);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      transition: background .22s ease, color .22s ease;
+    }
+    button, select { font: inherit; }
+    button:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .shell { min-height: 100vh; display: flex; justify-content: center; padding: 34px 18px; }
+    .phone {
+      width: 100%; max-width: 430px; height: min(900px, calc(100vh - 68px)); min-height: 700px;
+      background: var(--app); border: 1px solid var(--line); border-radius: 28px;
+      box-shadow: 0 22px 70px var(--shadow); overflow: hidden; position: relative;
+      display: flex; flex-direction: column; transition: background .22s ease, border-color .22s ease;
+    }
+    .status { height: 28px; flex: 0 0 28px; padding: 9px 20px 0; display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+    .header { padding: 14px 22px; display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; }
+    .brand { display: flex; gap: 10px; align-items: center; }
+    .mark { width: 34px; height: 34px; border-radius: 8px; background: var(--primary); display: grid; place-items: center; color: var(--primary-ink); font-weight: 800; font-size: 16px; }
+    .eyebrow { font-size: 11px; color: var(--muted); letter-spacing: 0; }
+    .title { font-size: 20px; font-weight: 800; letter-spacing: 0; }
+    .header .help { border: 1px solid var(--line); background: var(--surface); color: var(--muted); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+    .content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 18px 22px; scrollbar-width: none; }
+    .content::-webkit-scrollbar { display: none; }
+    .screen { display: none; }
+    .screen.active { display: block; animation: scene-cut .24s cubic-bezier(.2,.8,.2,1); }
+    @keyframes scene-cut { from { opacity: 0; clip-path: inset(0 100% 0 0); transform: translateX(-8px); } to { opacity: 1; clip-path: inset(0); transform: none; } }
+    .hero { background: var(--hero-bg); color: var(--hero-ink); border: 1px solid var(--line); border-radius: 8px; padding: 20px; position: relative; overflow: hidden; box-shadow: none; }
+    .hero:after { content: ""; position: absolute; width: 170px; height: 170px; border: 1px solid rgba(255,255,255,.22); border-radius: 50%; right: -70px; top: -75px; box-shadow: 0 0 0 18px rgba(255,255,255,.06), 0 0 0 36px rgba(255,255,255,.03); }
+    .hero small { opacity: .78; font-size: 12px; }
+    .hero h2 { margin: 6px 0 16px; font-size: 23px; letter-spacing: 0; }
+    .hero-row { display: flex; align-items: flex-end; justify-content: space-between; }
+    .metric strong { font-size: 42px; line-height: .9; letter-spacing: 0; }
+    .metric span { font-size: 13px; margin-left: 4px; opacity: .86; }
+    .eta { text-align: right; }
+    .eta b { font-size: 20px; }
+    .eta div { font-size: 11px; opacity: .76; margin-top: 3px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-top: 14px; box-shadow: 0 7px 22px var(--shadow); transition: background .22s ease, border-color .22s ease; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-title { font-size: 14px; font-weight: 750; }
+    .muted { font-size: 12px; color: var(--muted); }
+    .route-line { height: 6px; border-radius: 5px; background: linear-gradient(90deg, var(--blue) 0 40%, var(--line) 40%); margin: 8px 0 15px; }
+    .route-stations { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .route-stations b { color: var(--ink); }
+    .select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .select, .compact-select { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 11px 10px; background: var(--surface-soft); color: var(--ink); font-size: 13px; outline: none; }
+    .compact-select { width: auto; min-width: 110px; padding: 8px 28px 8px 10px; }
+    select { color-scheme: light; }
+    select option { background-color: var(--surface); color: var(--ink); }
+    select option:checked { background-color: var(--primary); color: var(--primary-ink); }
+    html[data-theme="dark"] select { color-scheme: dark; }
+    .primary { width: 100%; border: 0; border-radius: 8px; padding: 13px; background: var(--primary); color: var(--primary-ink); font-weight: 750; font-size: 15px; cursor: pointer; margin-top: 13px; }
+    .primary:active { transform: translateY(1px); }
+    .primary:disabled { opacity: .58; cursor: wait; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip { border: 1px solid var(--line-strong); background: var(--surface-soft); color: var(--muted); padding: 8px 11px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+    .chip.selected { background: var(--blue-soft); border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); color: var(--blue); font-weight: 700; }
+    .switch { width: 42px; height: 24px; border: 0; background: var(--line-strong); border-radius: 20px; padding: 3px; cursor: pointer; transition: .2s; flex: 0 0 auto; }
+    .switch i { display: block; width: 18px; height: 18px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: .2s; }
+    .switch.on { background: var(--blue); }
+    .switch.on i { transform: translateX(18px); }
+    html[data-theme="dark"] .switch.on i { background: var(--app); }
+    .confidence { display: flex; gap: 10px; align-items: center; background: var(--green-soft); border: 1px solid color-mix(in srgb, var(--green) 22%, var(--line)); color: var(--green); padding: 10px 12px; border-radius: 8px; font-size: 12px; margin-top: 14px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 5px color-mix(in srgb, var(--green) 13%, transparent); flex: 0 0 auto; }
+    .confidence.warn { background: var(--orange-soft); border-color: color-mix(in srgb, var(--orange) 25%, var(--line)); color: var(--orange); }
+    .confidence.warn .dot { background: var(--orange); box-shadow: 0 0 0 5px color-mix(in srgb, var(--orange) 13%, transparent); }
+    .timeline { position: relative; padding: 2px 0 4px 20px; }
+    .timeline:before { content: ""; position: absolute; left: 7px; top: 11px; bottom: 13px; width: 2px; background: var(--line-strong); }
+    .stop { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 11px 0; color: var(--muted); font-size: 13px; }
+    .stop:before { content: ""; position: absolute; left: -17px; width: 8px; height: 8px; border: 2px solid var(--line-strong); background: var(--surface); border-radius: 50%; z-index: 1; }
+    .stop.done { opacity: .62; }
+    .stop.done:before { background: var(--muted); border-color: var(--muted); }
+    .stop.current { color: var(--ink); font-weight: 750; }
+    .stop.current:before { width: 11px; height: 11px; left: -19px; border: 3px solid var(--blue-soft); background: var(--blue); box-shadow: 0 0 0 5px color-mix(in srgb, var(--blue) 12%, transparent); }
+    .bell { font-size: 13px; color: var(--blue); }
+    .adjust { border: 1px dashed color-mix(in srgb, var(--blue) 45%, var(--line)); background: var(--blue-soft); color: var(--blue); border-radius: 8px; width: 100%; padding: 10px; font-size: 12px; cursor: pointer; margin-top: 8px; }
+    .adjust.done { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); background: var(--green-soft); }
+    .simulation-control { margin-top: 12px; padding: 14px 0 5px; border-top: 1px solid var(--line); }
+    .simulation-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .simulation-row .iconbox { background: var(--surface-soft); color: var(--muted); }
+    .simulation-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; margin-top: 12px; }
+    .simulation-status { display: block; min-width: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .simulation-speed { display: grid; grid-template-columns: auto minmax(96px, auto); align-items: center; gap: 7px; color: var(--muted); font-size: 10px; }
+    .simulation-speed .compact-select { min-width: 96px; padding-top: 7px; padding-bottom: 7px; font-size: 11px; }
+    .simulation-speed .compact-picker-trigger { min-width: 106px; min-height: 34px; padding: 6px 2px; }
+    .simulation-speed .select-trigger-value { font-size: 11px; }
+    .settings-heading { display: flex; justify-content: space-between; align-items: flex-end; padding: 4px 2px 2px; }
+    .settings-heading h2 { font-size: 22px; margin: 0; }
+    .settings-heading span { color: var(--muted); font-size: 11px; }
+    .settings-section { margin-top: 16px; }
+    .section-label { color: var(--muted); font-size: 11px; font-weight: 700; margin: 0 2px 7px; }
+    .settings-card { margin-top: 0; padding: 0 16px; }
+    .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .settings-row:last-child { border-bottom: 0; }
+    .settings-row.action { width: 100%; border-top: 0; border-left: 0; border-right: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+    .settings-row.column { align-items: stretch; flex-direction: column; gap: 12px; }
+    .row-main { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .row-copy { min-width: 0; }
+    .row-copy b { display: block; font-size: 13px; }
+    .iconbox { width: 32px; height: 32px; border-radius: 8px; background: var(--blue-soft); color: var(--blue); display: grid; place-items: center; font-size: 15px; flex: 0 0 auto; }
+    .subline { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; font-weight: 400; line-height: 1.45; }
+    .theme-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .theme-option { border: 1px solid var(--line-strong); background: var(--surface-soft); color: var(--muted); border-radius: 8px; padding: 10px 6px; cursor: pointer; font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; }
+    .theme-option.selected { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); font-weight: 700; }
+    .theme-icon { font-size: 17px; height: 20px; line-height: 20px; }
+    .alert-mode-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+    .alert-mode-option { min-width: 0; min-height: 48px; border: 1px solid var(--line-strong); background: var(--surface-soft); color: var(--muted); border-radius: 8px; padding: 8px 10px; cursor: pointer; text-align: left; }
+    .alert-mode-option b { display: block; color: var(--ink); font-size: 12px; }
+    .alert-mode-option span { display: block; font-size: 10px; line-height: 1.4; margin-top: 2px; }
+    .alert-mode-option.selected { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+    .alert-mode-option.selected b { color: var(--blue); }
+    .settings-row.mode-overridden { opacity: .55; }
+    .switch:disabled { cursor: not-allowed; }
+    .status-pill { display: inline-flex; align-items: center; justify-content: center; border-radius: 20px; padding: 5px 8px; font-size: 10px; color: var(--muted); background: var(--surface-soft); border: 1px solid var(--line); white-space: nowrap; }
+    .status-pill.ok { color: var(--green); background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 24%, var(--line)); }
+    .status-pill.warn { color: var(--orange); background: var(--orange-soft); border-color: color-mix(in srgb, var(--orange) 24%, var(--line)); }
+    .text-button { border: 0; background: none; color: var(--blue); padding: 7px 0; font-size: 12px; cursor: pointer; }
+    .text-button.danger { color: var(--danger); }
+    .settings-link { color: inherit; text-decoration: none; }
+    .settings-details summary { list-style: none; cursor: pointer; }
+    .settings-details summary::-webkit-details-marker { display: none; }
+    .settings-details p { margin: -2px 0 14px 43px; line-height: 1.65; }
+    .settings-details[open] .chevron { transform: rotate(90deg); }
+    .chevron { color: var(--muted); font-size: 17px; }
+    .history-item { display: flex; gap: 11px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .history-item:last-child { border: 0; }
+    .date { font-size: 11px; color: var(--muted); min-width: 46px; }
+    .history-item b { font-size: 13px; }
+    .history-item p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+    .bottom { height: 72px; flex: 0 0 72px; background: var(--nav); backdrop-filter: blur(14px); border-top: 1px solid var(--line); display: flex; justify-content: space-around; padding-top: 9px; }
+    .nav { border: 0; background: none; color: var(--muted); font-size: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; }
+    .nav .nav-icon { font-size: 19px; line-height: 1; }
+    .nav.active { color: var(--blue); font-weight: 700; }
+    .trip-alert { position: absolute; top: 86px; left: 18px; right: 18px; z-index: 8; display: flex; align-items: flex-start; gap: 10px; background: var(--orange-soft); border: 1px solid color-mix(in srgb, var(--orange) 42%, var(--line)); color: var(--ink); border-radius: 8px; padding: 12px; box-shadow: 0 12px 34px rgba(0,0,0,.28); animation: alert-in .2s ease-out; }
+    .trip-alert[hidden] { display: none; }
+    .trip-alert-icon { width: 28px; height: 28px; border-radius: 50%; background: var(--orange); color: white; display: grid; place-items: center; font-weight: 800; flex: 0 0 auto; }
+    .trip-alert-copy { min-width: 0; flex: 1 1 auto; }
+    .trip-alert-copy strong { display: block; font-size: 13px; }
+    .trip-alert-copy span { display: block; color: var(--muted); font-size: 11px; line-height: 1.5; margin-top: 3px; }
+    .trip-alert-dismiss { border: 0; background: none; color: var(--muted); width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1; flex: 0 0 auto; }
+    .trip-alert-dismiss:hover { background: color-mix(in srgb, var(--orange) 13%, transparent); color: var(--ink); }
+    @keyframes alert-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .arrival-modal-layer { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 24px; background: rgba(7, 11, 18, .72); backdrop-filter: blur(5px); }
+    .arrival-modal-layer[hidden] { display: none; }
+    .arrival-modal { width: 100%; max-width: 340px; max-height: calc(100% - 32px); overflow-y: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 8px; padding: 24px 20px 18px; text-align: center; box-shadow: 0 22px 55px rgba(0, 0, 0, .32); animation: modal-in .24s ease-out; }
+    .arrival-mark { width: 58px; height: 58px; margin: 0 auto 15px; border-radius: 50%; display: grid; place-items: center; background: var(--green-soft); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 32%, var(--line)); font-size: 22px; font-weight: 850; box-shadow: 0 0 0 9px color-mix(in srgb, var(--green) 9%, transparent); }
+    .arrival-modal h2 { margin: 0; font-size: 22px; line-height: 1.3; letter-spacing: 0; }
+    .arrival-modal p { margin: 9px auto 0; max-width: 260px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+    .arrival-meta { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; margin-top: 15px; padding: 5px 10px; border-radius: 8px; background: var(--surface-soft); border: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    .arrival-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 20px; }
+    .arrival-actions button { min-height: 42px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px; }
+    .arrival-later { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); }
+    .arrival-finish { border: 0; background: var(--primary); color: var(--primary-ink); }
+    @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+    .adjust.preview { border-style: solid; background: var(--surface); color: var(--muted); border-color: var(--line-strong); }
+    .toast { position: absolute; left: 50%; transform: translateX(-50%); bottom: 80px; background: var(--primary); color: var(--primary-ink); padding: 9px 14px; border-radius: 8px; font-size: 12px; opacity: 0; pointer-events: none; transition: .25s; white-space: normal; text-align: center; max-width: calc(100% - 32px); z-index: 5; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+    .toast.show { opacity: 1; bottom: 88px; }
+    @media (max-width: 470px) {
+      .shell { padding: 0; }
+      .phone { border-radius: 0; height: 100svh; min-height: 0; border: 0; }
+      .status { height: calc(28px + env(safe-area-inset-top)); flex-basis: calc(28px + env(safe-area-inset-top)); padding-top: calc(10px + env(safe-area-inset-top)); }
+      .bottom { height: calc(72px + env(safe-area-inset-bottom)); flex-basis: calc(72px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); }
+      .trip-alert { top: calc(86px + env(safe-area-inset-top)); left: 12px; right: 12px; }
+      .arrival-modal-layer { padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); }
+    }
+    @media (max-width: 360px) {
+      .content { padding-left: 12px; padding-right: 12px; }
+      .select-grid { grid-template-columns: 1fr; }
+      .header { padding-left: 16px; padding-right: 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .screen.active, .trip-alert, .arrival-modal, .toast { animation: none; transition: none; }
+    }
+
+    /* visual refresh: a soft route scene replaces the stacked admin cards */
+    .ui-icon, .nav-icon { display: inline-block; width: 18px; height: 18px; background: currentColor; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; vertical-align: middle; }
+    .icon-help { -webkit-mask-image: url("icons/circle-help.svg"); mask-image: url("icons/circle-help.svg"); }
+    .icon-navigation { -webkit-mask-image: url("icons/navigation.svg"); mask-image: url("icons/navigation.svg"); }
+    .icon-arrow { -webkit-mask-image: url("icons/arrow-right.svg"); mask-image: url("icons/arrow-right.svg"); }
+    .icon-route { -webkit-mask-image: url("icons/route.svg"); mask-image: url("icons/route.svg"); }
+    .icon-active { -webkit-mask-image: url("icons/circle-dot.svg"); mask-image: url("icons/circle-dot.svg"); }
+    .icon-history { -webkit-mask-image: url("icons/history.svg"); mask-image: url("icons/history.svg"); }
+    .icon-settings { -webkit-mask-image: url("icons/settings.svg"); mask-image: url("icons/settings.svg"); }
+    .icon-bell { -webkit-mask-image: url("icons/bell-ring.svg"); mask-image: url("icons/bell-ring.svg"); }
+    .icon-flag { -webkit-mask-image: url("icons/flag.svg"); mask-image: url("icons/flag.svg"); }
+    .icon-pin { -webkit-mask-image: url("icons/map-pin.svg"); mask-image: url("icons/map-pin.svg"); }
+    .icon-monitor { -webkit-mask-image: url("icons/monitor.svg"); mask-image: url("icons/monitor.svg"); }
+    .icon-moon { -webkit-mask-image: url("icons/moon.svg"); mask-image: url("icons/moon.svg"); }
+    .icon-sun { -webkit-mask-image: url("icons/sun.svg"); mask-image: url("icons/sun.svg"); }
+    .icon-reset { -webkit-mask-image: url("icons/rotate-ccw.svg"); mask-image: url("icons/rotate-ccw.svg"); }
+    .icon-train { -webkit-mask-image: url("icons/train-front.svg"); mask-image: url("icons/train-front.svg"); }
+    .icon-volume { -webkit-mask-image: url("icons/volume-2.svg"); mask-image: url("icons/volume-2.svg"); }
+    .icon-play { -webkit-mask-image: url("icons/play.svg"); mask-image: url("icons/play.svg"); }
+    .icon-check { -webkit-mask-image: url("icons/circle-check.svg"); mask-image: url("icons/circle-check.svg"); }
+    .icon-advance { -webkit-mask-image: url("icons/circle-plus.svg"); mask-image: url("icons/circle-plus.svg"); }
+    .icon-languages { -webkit-mask-image: url("icons/languages.svg"); mask-image: url("icons/languages.svg"); }
+
+    .phone { border-radius: 34px; }
+    .header { padding-top: 16px; padding-bottom: 12px; }
+    .mark { border-radius: 12px; width: 40px; height: 40px; box-shadow: none; }
+    .title { font-size: 21px; }
+    .header .help { border-radius: 14px; width: 40px; height: 40px; display: grid; place-items: center; }
+    .header .help .ui-icon { width: 19px; height: 19px; }
+
+    .home-hero { min-height: 248px; padding: 18px 18px 16px; border-radius: 22px; background: var(--hero-bg); color: var(--hero-ink); border: 1px solid var(--line); box-shadow: none; }
+    .home-hero:before, .home-hero:after, .trip-hero:after { display: none; }
+    .hero-status-row, .trip-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; position: relative; z-index: 1; }
+    .data-chip, .line-chip, .trip-live { display: inline-flex; align-items: center; gap: 7px; min-height: 27px; padding: 5px 9px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+    .data-chip small { font-size: 10px; white-space: nowrap; }
+    .line-chip { font-size: 11px; }
+    .line-chip b { font-size: 15px; }
+    .status-beacon, .trip-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 35%, transparent); animation: beacon-pulse 2.4s ease-out infinite; }
+    @keyframes beacon-pulse { 0%, 55%, 100% { box-shadow: 0 0 0 0 transparent; } 20% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--green) 13%, transparent); } }
+    .hero-copy { position: relative; z-index: 1; margin-top: 23px; }
+    .hero-kicker { color: var(--hero-muted); font-size: 11px; letter-spacing: 0; text-transform: uppercase; }
+    .hero h2 { color: var(--hero-ink); font-size: 25px; margin: 5px 0 0; letter-spacing: 0; }
+    .metro-motion { position: relative; z-index: 1; height: 55px; margin: 15px 5px 7px; }
+    .metro-track { position: absolute; left: 0; right: 0; top: 26px; height: 2px; border-radius: 9px; background: var(--line-strong); }
+    .metro-track:after { content: ""; position: absolute; inset: -5px 0; border-top: 1px dashed color-mix(in srgb, var(--hero-muted) 24%, transparent); border-bottom: 1px dashed color-mix(in srgb, var(--hero-muted) 12%, transparent); }
+    .motion-station { position: absolute; top: -5px; width: 12px; height: 12px; border: 3px solid var(--hero-bg); background: var(--hero-muted); box-shadow: 0 0 0 1px var(--line-strong); border-radius: 50%; z-index: 2; }
+    .station-one { left: 0; } .station-two { left: 33%; } .station-three { left: 66%; } .station-four { right: 0; }
+    .train-runner { position: absolute; top: -12px; left: 6%; width: 34px; height: 30px; animation: train-glide 7s cubic-bezier(.55,.05,.35,.95) infinite alternate; z-index: 3; }
+    .train-car { position: relative; display: flex; align-items: center; justify-content: space-evenly; width: 34px; height: 22px; border-radius: 8px 8px 5px 5px; background: var(--primary); box-shadow: 0 4px 12px var(--shadow); }
+    .train-car:after { content: ""; position: absolute; left: 5px; right: 5px; bottom: -4px; height: 4px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 30%, transparent); }
+    .train-car i { width: 4px; height: 4px; border-radius: 50%; background: var(--primary-ink); }
+    @keyframes train-glide {
+      0%, 10% { left: 6%; }
+      31%, 42% { left: 33%; }
+      64%, 75% { left: 66%; }
+      94%, 100% { left: calc(100% - 34px); }
+    }
+    .hero-route-summary { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 12px; margin-top: 7px; }
+    .hero-station { min-width: 0; }
+    .hero-station.end { text-align: right; }
+    .hero-station span { display: block; color: var(--hero-muted); font-size: 10px; margin-bottom: 3px; }
+    .hero-station strong { display: block; overflow: hidden; color: var(--hero-ink); text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+    .hero-station strong.route-updated { animation: station-update .28s cubic-bezier(.2,.8,.2,1); }
+    @keyframes station-update { from { opacity: .25; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .route-arrow { display: grid; place-items: center; width: 30px; height: 30px; color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--line)); border-radius: 50%; background: var(--surface); }
+    .route-arrow .ui-icon { width: 14px; height: 14px; }
+    .journey-sheet { position: relative; z-index: 2; margin: 14px 0 0; padding: 20px 18px 22px; border-radius: 18px; background: var(--surface); box-shadow: none; border: 1px solid var(--line); }
+    .sheet-grab { display: none; }
+    .journey-sheet .card-head { margin-bottom: 20px; }
+    .sheet-subtitle { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+    .route-badge { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+    .route-badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--metro-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--metro-line) 12%, transparent); }
+    .line-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+    .line-controls .select, .station-picker .select { border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; background: transparent; padding: 11px 2px; }
+    .line-controls .select:focus, .station-picker .select:focus { box-shadow: none; border-color: var(--blue); }
+    .station-picker { display: grid; grid-template-columns: 21px 1fr; gap: 10px; margin-top: 18px; }
+    .station-rail { position: relative; display: flex; flex-direction: column; align-items: center; padding: 22px 0 20px; }
+    .station-rail:before { content: ""; position: absolute; top: 28px; bottom: 28px; width: 2px; background: linear-gradient(var(--blue), var(--metro-line)); border-radius: 9px; }
+    .station-rail i { width: 11px; height: 11px; border-radius: 50%; border: 3px solid var(--surface); background: var(--blue); box-shadow: 0 0 0 2px var(--blue); z-index: 1; }
+    .station-rail i:last-child { background: var(--metro-line); box-shadow: 0 0 0 2px var(--metro-line); }
+    .station-rail span { flex: 1; }
+    .station-fields { display: grid; gap: 16px; }
+    .station-field label { margin-bottom: 0; }
+    .reminder-inline { margin-top: 22px; }
+    .inline-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .inline-heading span { font-size: 12px; font-weight: 750; }
+    .inline-heading small { color: var(--muted); font-size: 10px; }
+    .reminder-inline .chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px; border-radius: 12px; background: var(--surface-soft); border: 1px solid var(--line); }
+    .reminder-inline .chip { min-height: 40px; padding: 8px 4px; border: 0; border-radius: 9px; background: transparent; white-space: nowrap; }
+    .reminder-inline .chip.selected { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px var(--shadow); }
+    .journey-sheet .primary { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 53px; margin-top: 18px; border-radius: 13px; background: var(--primary); color: var(--primary-ink); box-shadow: none; }
+    .journey-sheet .primary .icon-arrow { width: 19px; height: 19px; }
+    .sheet-note { margin-top: 16px; padding: 0 2px; border: 0; background: transparent; color: var(--muted); box-shadow: none; font-size: 10px; }
+    .sheet-note .dot { width: 6px; height: 6px; box-shadow: none; background: var(--green); }
+    .trip-hero { min-height: 205px; padding: 18px 18px 17px; border-radius: 22px; background: var(--hero-bg); color: var(--hero-ink); border: 1px solid var(--line); box-shadow: none; }
+    .trip-hero h2 { margin: 22px 0 7px; font-size: 22px; }
+    .trip-live { font-size: 10px; padding: 5px 8px; }
+    .trip-motion { position: relative; height: 13px; margin: 3px 0 14px; border-bottom: 2px solid var(--line-strong); }
+    .trip-motion span { position: absolute; left: 0; right: 0; bottom: -5px; height: 8px; border-bottom: 1px dashed color-mix(in srgb, var(--hero-muted) 20%, transparent); }
+    .trip-motion i { position: absolute; bottom: -6px; width: 9px; height: 9px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 11%, transparent); }
+    .trip-motion i:nth-of-type(1) { left: 0; } .trip-motion i:nth-of-type(2) { left: 42%; } .trip-motion i:nth-of-type(3) { right: 0; }
+    .trip-motion b { position: absolute; left: var(--trip-progress, 0%); bottom: -7px; width: 16px; height: 12px; border-radius: 5px; background: var(--primary); transform: translateX(-50%); transition: left .55s cubic-bezier(.2,.8,.2,1); }
+    #progressBar { position: relative; overflow: hidden; background: var(--line); }
+    #progressBar:before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--trip-progress, 0%); border-radius: inherit; background: var(--blue); transition: width .55s cubic-bezier(.2,.8,.2,1); }
+    .stop.current:before { animation: current-stop 2.4s ease-out infinite; }
+    @keyframes current-stop { 0%, 60%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 11%, transparent); } 25% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--blue) 4%, transparent); } }
+    .bottom { margin: 10px 12px 12px; height: 65px; flex: 0 0 65px; border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 8px 24px var(--shadow); padding: 6px; gap: 4px; }
+    .nav { min-width: 0; flex: 1 1 0; border-radius: 12px; gap: 3px; transition: background .2s, color .2s, transform .2s; }
+    .nav .nav-icon { width: 18px; height: 18px; }
+    .nav.active { background: var(--surface-soft); color: var(--ink); transform: translateY(-1px); }
+    .theme-icon.ui-icon { width: 19px; height: 19px; }
+
+    /* Cinematic settings: numbered scenes, hard cuts and restrained route color. */
+    #settings { counter-reset: setting-scene; padding-bottom: 12px; }
+    #settings .settings-heading {
+      position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 142px);
+      align-items: end; gap: 8px 18px; padding: 18px 0 23px;
+    }
+    #settings .settings-heading h2 {
+      position: relative; margin: 0; padding-left: 15px; font: 750 31px/1.08 "Songti SC", "STSong", "Noto Serif SC", serif;
+    }
+    #settings .settings-heading h2:before {
+      content: ""; position: absolute; left: 0; top: 3px; bottom: 2px; width: 3px; background: var(--metro-line);
+    }
+    #settings .settings-heading > span { align-self: end; color: var(--muted); font-size: 10px; line-height: 1.5; text-align: right; }
+    #settings .settings-signature { grid-column: 1 / -1; display: grid; grid-template-columns: 10px 1fr 10px; align-items: center; margin-top: 10px; }
+    #settings .settings-signature span { height: 1px; background: var(--line-strong); }
+    #settings .settings-signature i { width: 10px; height: 10px; border: 2px solid var(--green); border-radius: 50%; background: var(--app); }
+    #settings .settings-signature i:last-child { border-color: var(--metro-line); }
+    #settings .settings-section {
+      counter-increment: setting-scene; display: grid; grid-template-columns: 30px minmax(0, 1fr);
+      column-gap: 13px; margin-top: 31px;
+    }
+    #settings .settings-heading + .settings-section { margin-top: 8px; }
+    #settings .settings-section:before {
+      content: counter(setting-scene, decimal-leading-zero); grid-column: 1; grid-row: 1 / span 2;
+      padding-top: 3px; color: var(--metro-line); font: 750 10px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+    #settings .section-label {
+      grid-column: 2; margin: 0 0 10px; color: var(--ink); font: 700 15px/1.2 "Songti SC", "STSong", "Noto Serif SC", serif;
+    }
+    #settings .settings-card {
+      grid-column: 2; margin: 0; padding: 0; background: transparent; border: 0; border-top: 1px solid var(--line-strong);
+      border-radius: 0; box-shadow: none;
+    }
+    #settings .settings-row { min-height: 64px; padding: 15px 0; border-bottom: 1px solid var(--line); }
+    #settings .settings-row.column { gap: 17px; padding-top: 17px; padding-bottom: 19px; }
+    #settings .row-main { gap: 12px; }
+    #settings .row-copy b { font-size: 13px; font-weight: 690; }
+    #settings .subline { margin-top: 4px; line-height: 1.55; }
+    #settings .iconbox { width: 21px; height: 21px; border-radius: 0; color: var(--muted); background: transparent; }
+    #settings .iconbox .ui-icon { width: 17px; height: 17px; }
+    #settings .theme-picker, #settings .alert-mode-picker {
+      display: grid; grid-template-columns: 1fr; gap: 0; width: 100%; padding: 0; overflow: hidden;
+      border: 1px solid var(--line-strong); border-radius: 2px 12px 2px 12px; background: transparent;
+    }
+    #settings .theme-option, #settings .alert-mode-option {
+      position: relative; width: 100%; min-width: 0; min-height: 56px; border: 0; border-bottom: 1px solid var(--line);
+      border-radius: 0; background: transparent; color: var(--muted); box-shadow: none; cursor: pointer; text-align: left;
+    }
+    #settings .theme-option:last-child, #settings .alert-mode-option:last-child { border-bottom: 0; }
+    #settings .theme-option { display: grid; grid-template-columns: 50px minmax(0, 1fr) 12px; align-items: center; gap: 12px; padding: 10px 15px 10px 11px; }
+    #settings .theme-option > [data-i18n] { font-size: 12px; }
+    #settings .theme-swatch {
+      position: relative; display: block; width: 50px; height: 31px; overflow: hidden; border: 1px solid #4a6283;
+      border-radius: 1px 9px 1px 9px; background: #0c111b;
+    }
+    #settings .theme-swatch:before { content: ""; position: absolute; left: 10px; right: 10px; top: 15px; height: 1px; background: #7185a1; }
+    #settings .theme-swatch:after {
+      content: ""; position: absolute; right: 7px; top: 12px; width: 6px; height: 6px; border-radius: 50%; background: #739ce0;
+      box-shadow: -35px 0 0 #9bbcf0;
+    }
+    #settings .theme-swatch-light { border-color: #a6b6cd; background: #ffffff; }
+    #settings .theme-swatch-light:after { background: #43699f; box-shadow: -35px 0 0 #285aa4; }
+    #settings .theme-swatch-system { background: linear-gradient(90deg, #0c111b 0 50%, #ffffff 50%); }
+    #settings .alert-mode-option { padding: 11px 42px 11px 15px; }
+    #settings .alert-mode-option b { color: var(--ink); font-size: 12px; }
+    #settings .alert-mode-option span { font-size: 10px; line-height: 1.45; margin-top: 3px; }
+    #settings :is(.theme-option, .alert-mode-option):after {
+      content: ""; position: absolute; right: 16px; top: 50%; width: 9px; height: 9px; border: 1px solid var(--muted);
+      border-radius: 50%; transform: translateY(-50%);
+    }
+    #settings :is(.theme-option, .alert-mode-option).selected {
+      color: var(--ink); background: var(--green-soft); box-shadow: inset 3px 0 0 var(--green);
+    }
+    #settings :is(.theme-option, .alert-mode-option).selected:after { border-color: var(--green); background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+    #settings .alert-mode-option.selected b { color: var(--ink); }
+    #settings .compact-select {
+      min-width: 106px; padding: 8px 25px 8px 4px; background: transparent; border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0;
+    }
+    #settings .compact-select:focus { border-color: var(--green); }
+    #settings .switch.on { background: var(--green); }
+    #settings .status-pill { gap: 7px; padding: 4px 0; border: 0; border-radius: 0; background: transparent; }
+    #settings .status-pill:before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+    #settings .status-pill.ok { color: var(--green); background: transparent; border: 0; }
+    #settings .status-pill.ok:before { background: var(--green); }
+    #settings .status-pill.warn { color: var(--metro-line); background: transparent; border: 0; }
+    #settings .status-pill.warn:before { background: var(--metro-line); }
+    #settings .settings-row.action:hover { background: color-mix(in srgb, var(--surface-soft) 55%, transparent); }
+    #settings .settings-details p { margin-left: 33px; }
+
+    .mark { border: 1px solid var(--line-strong); border-radius: 50%; background: transparent; color: var(--green); }
+    .header .help { border-radius: 50%; background: transparent; }
+    .line-chip b { color: var(--metro-line); }
+    .home-hero, .trip-hero { border-radius: 2px 18px 2px 18px; }
+    .journey-sheet { border-radius: 18px 2px 18px 2px; }
+    .journey-sheet .primary { border-radius: 2px 12px 2px 12px; }
+    .bottom { margin: 0; height: 72px; flex-basis: 72px; padding: 7px 10px 8px; gap: 4px; border: 0; border-top: 1px solid var(--line-strong); border-radius: 0; box-shadow: none; }
+    .nav { position: relative; border-radius: 0; transform: none; }
+    .nav.active { background: transparent; color: var(--ink); transform: none; }
+    .nav.active .nav-icon { color: var(--green); }
+    .nav.active:after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 24px; height: 2px; background: var(--metro-line); transform: translateX(-50%); }
+
+    @media (max-width: 360px) {
+      .journey-sheet { margin-left: 0; margin-right: 0; padding: 19px 15px 21px; }
+      .line-controls { grid-template-columns: 1fr; gap: 14px; }
+      .line-controls > .field { min-width: 0; }
+      .hero h2 { font-size: 22px; }
+      .data-chip small { font-size: 9px; }
+      #settings .settings-heading { grid-template-columns: 1fr; gap: 6px; }
+      #settings .settings-heading > span { text-align: left; }
+      #settings .settings-signature { margin-top: 8px; }
+      #settings .settings-section { grid-template-columns: 25px minmax(0, 1fr); column-gap: 9px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .status-beacon, .train-runner, .stop.current:before, .hero-station strong.route-updated { animation: none; }
+      .nav, .journey-sheet .primary, .reminder-inline .chip, .switch i, .trip-motion b, #progressBar:before { transition: none; }
+    }
+
+    /* Whole-product cinematic system: touch-first controls and continuous scenes. */
+    .icon-x { -webkit-mask-image: url("icons/x.svg"); mask-image: url("icons/x.svg"); }
+    .phone { isolation: isolate; }
+    .title, .hero h2, .trip-hero h2, .card-title, .history-heading h2, .picker-header h2, .arrival-modal h2 {
+      font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
+    }
+    .header { padding-bottom: 15px; }
+    .title { font-size: 22px; font-weight: 750; }
+    .content { padding-bottom: 30px; }
+
+    .home-hero {
+      min-height: 258px; padding: 22px 2px 24px; border: 0; border-top: 1px solid var(--line-strong);
+      border-bottom: 3px solid var(--ink); border-radius: 0; background: transparent;
+    }
+    .hero-status-row { min-height: 28px; }
+    .data-chip, .line-chip, .trip-live {
+      min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent;
+    }
+    .data-chip { max-width: calc(100% - 76px); }
+    .data-chip small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .line-chip b { color: var(--metro-line); font: 750 17px/1 "Songti SC", "STSong", serif; }
+    .hero-copy { margin-top: 29px; }
+    .home-hero h2 { max-width: 315px; font-size: 30px; line-height: 1.22; }
+    .metro-motion { height: 52px; margin: 18px 3px 8px; }
+    .metro-track { top: 25px; height: 1px; border-radius: 0; background: var(--line-strong); }
+    .metro-track:after { display: none; }
+    .motion-station { top: -5px; width: 11px; height: 11px; border-width: 2px; border-color: var(--app); background: var(--muted); box-shadow: 0 0 0 1px var(--line-strong); }
+    .motion-station:first-child { background: var(--green); box-shadow: 0 0 0 1px var(--green); }
+    .motion-station:last-child { background: var(--metro-line); box-shadow: 0 0 0 1px var(--metro-line); }
+    .train-runner { top: -14px; width: 30px; height: 30px; }
+    .train-car { width: 30px; height: 26px; border-radius: 0; background: transparent; box-shadow: none; color: var(--ink); }
+    .train-car:before { content: ""; width: 25px; height: 25px; background: currentColor; -webkit-mask: url("icons/train-front.svg") center / contain no-repeat; mask: url("icons/train-front.svg") center / contain no-repeat; }
+    .train-car:after, .train-car i { display: none; }
+    .hero-route-summary { margin-top: 13px; gap: 16px; }
+    .hero-station span { margin-bottom: 5px; }
+    .hero-station strong { font: 750 20px/1.25 "Songti SC", "STSong", serif; }
+    .hero-station:first-child strong { color: var(--green); }
+    .hero-station.end strong { color: var(--metro-line); }
+    .route-arrow { width: 26px; height: 26px; border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+
+    .journey-sheet {
+      margin: 27px 0 0; padding: 20px 2px 28px; border: 0; border-top: 1px solid var(--line-strong);
+      border-radius: 0; background: transparent;
+    }
+    .journey-sheet .card-head { position: relative; margin-bottom: 24px; padding-left: 34px; }
+    .journey-sheet .card-head:before {
+      content: "01"; position: absolute; left: 0; top: 3px; color: var(--metro-line);
+      font: 750 11px/1 "Songti SC", "STSong", serif;
+    }
+    .journey-sheet .card-title { font-size: 19px; line-height: 1.25; }
+    .route-badge { padding: 0; border: 0; background: transparent; }
+    .line-controls { gap: 20px; }
+    .field { position: relative; min-width: 0; }
+    .field label { margin-bottom: 3px; }
+    .phone.picker-enhanced .native-select-source {
+      position: absolute !important; width: 1px !important; height: 1px !important; margin: -1px !important;
+      padding: 0 !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; clip-path: inset(50%) !important;
+      border: 0 !important; opacity: 0 !important; pointer-events: none !important;
+    }
+    .select-trigger {
+      width: 100%; min-width: 0; min-height: 49px; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line-strong);
+      border-radius: 0; background: transparent; color: var(--ink); display: flex; align-items: center;
+      justify-content: space-between; gap: 12px; text-align: left; cursor: pointer;
+    }
+    .select-trigger-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 650; }
+    .select-trigger-icon { width: 14px; height: 14px; flex: 0 0 auto; color: var(--muted); transform: rotate(90deg); transition: transform .2s ease; }
+    .select-trigger[aria-expanded="true"] .select-trigger-icon { color: var(--green); transform: rotate(-90deg); }
+    .select-trigger:disabled { opacity: .48; cursor: wait; }
+    .station-picker { grid-template-columns: 24px minmax(0, 1fr); gap: 13px; margin-top: 25px; }
+    .station-rail { padding: 29px 0 28px; }
+    .station-rail:before { top: 34px; bottom: 34px; width: 1px; }
+    .station-rail i { width: 10px; height: 10px; border-width: 2px; }
+    .station-fields { gap: 0; }
+    .station-field { min-height: 72px; padding: 8px 0 7px; }
+    .station-field + .station-field { border-top: 1px solid var(--line); }
+    .station-field .select-trigger { min-height: 47px; border-bottom: 0; }
+    .station-field .select-trigger-value { font: 750 19px/1.25 "Songti SC", "STSong", serif; }
+    .station-field:first-child .select-trigger-value { color: var(--green); }
+    .station-field:last-child .select-trigger-value { color: var(--metro-line); }
+    .reminder-inline { margin-top: 25px; padding-top: 18px; border-top: 1px solid var(--line-strong); }
+    .reminder-inline .chips { gap: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+    .reminder-inline .chip { min-height: 45px; border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; background: transparent; }
+    .reminder-inline .chip.selected { background: transparent; color: var(--ink); box-shadow: inset 0 -3px 0 var(--green); }
+    .journey-sheet .primary { min-height: 55px; margin-top: 20px; border-radius: 2px 12px 2px 12px; }
+    .sheet-note { margin-top: 17px; line-height: 1.55; }
+
+    #trip { counter-reset: trip-scene; }
+    .trip-hero {
+      min-height: 232px; padding: 22px 2px 25px; border: 0; border-top: 1px solid var(--line-strong);
+      border-bottom: 3px solid var(--ink); border-radius: 0; background: transparent;
+    }
+    .trip-hero h2 { max-width: 330px; margin: 32px 0 15px; font-size: 30px; line-height: 1.25; }
+    .trip-live { color: var(--green); }
+    .trip-motion { border-bottom-width: 1px; }
+    .trip-motion span { display: none; }
+    .trip-motion b { height: 14px; border-radius: 0; background: var(--ink); }
+    .metric strong { color: var(--green); font-family: "Songti SC", "STSong", serif; font-size: 58px; }
+    .eta b { color: var(--metro-line); font-family: "Songti SC", "STSong", serif; }
+    #trip > .card {
+      counter-increment: trip-scene; margin-top: 28px; padding: 20px 2px 24px; border: 0;
+      border-top: 1px solid var(--line-strong); border-radius: 0; background: transparent; box-shadow: none;
+    }
+    #trip > .card .card-head { position: relative; padding-left: 34px; }
+    #trip > .card .card-head:before {
+      content: counter(trip-scene, decimal-leading-zero); position: absolute; left: 0; top: 3px;
+      color: var(--metro-line); font: 750 11px/1 "Songti SC", "STSong", serif;
+    }
+    #trip > .card .card-title { font-size: 18px; }
+    #trip .route-line { height: 2px; margin: 17px 0 17px; border-radius: 0; }
+    #trip .timeline { padding-top: 10px; padding-bottom: 8px; }
+    #trip .stop { min-height: 46px; padding: 12px 0; }
+    #trip .stop.done { opacity: 1; color: var(--muted); }
+    #trip .stop.current { color: var(--green); }
+    #trip .bell { color: var(--metro-line); }
+    #trip .adjust { min-height: 50px; border-radius: 2px 10px 2px 10px; }
+    #adjustBtn { min-height: 55px; margin-top: 18px; border: 0; background: var(--primary); color: var(--primary-ink); font-size: 14px; font-weight: 750; }
+    #previewAlertBtn { margin-top: 10px; border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; background: transparent; color: var(--muted); }
+    #trip > .confidence { margin-top: 4px; padding: 12px 2px 12px 14px; border: 0; border-left: 3px solid var(--metro-line); border-radius: 0; background: transparent; color: var(--muted); }
+    #trip > .card .settings-row { padding-left: 0; padding-right: 0; border-bottom: 0; }
+    #trip > .card .iconbox { border-radius: 0; background: transparent; color: var(--green); }
+    #endBtn { min-height: 50px; border: 1px solid var(--metro-line); background: transparent; color: var(--metro-line); }
+
+    .history-heading { position: relative; padding: 20px 0 23px; border-bottom: 3px solid var(--ink); }
+    .history-heading:after { content: ""; position: absolute; left: 0; bottom: -3px; width: 62px; height: 3px; background: var(--metro-line); }
+    .history-heading h2 { margin: 0; padding-left: 15px; border-left: 3px solid var(--green); font-size: 31px; line-height: 1.1; }
+    .history-signature { display: grid; grid-template-columns: 10px 1fr 10px; align-items: center; margin-top: 20px; }
+    .history-signature span { height: 1px; background: var(--line-strong); }
+    .history-signature i { width: 10px; height: 10px; border: 2px solid var(--green); border-radius: 50%; }
+    .history-signature i:last-child { border-color: var(--metro-line); }
+    #history .card { margin-top: 30px !important; padding: 19px 2px 24px; border: 0; border-top: 1px solid var(--line-strong); border-radius: 0; background: transparent; box-shadow: none; }
+    #history .card + .card { margin-top: 8px !important; }
+    #history .card-title { font-size: 18px; }
+    .history-empty-route { display: grid; grid-template-columns: 12px 1fr 12px; align-items: center; margin: 28px 5px 24px; }
+    .history-empty-route span { height: 1px; background: var(--line-strong); }
+    .history-empty-route i { width: 12px; height: 12px; border: 2px solid var(--green); border-radius: 50%; }
+    .history-empty-route i:last-child { border-color: var(--metro-line); }
+
+    #settings .settings-section:before { font-family: "Songti SC", "STSong", serif; }
+    #settings .compact-picker-trigger { width: auto; min-width: 112px; max-width: 47%; padding: 10px 1px 9px 8px; }
+    #settings .compact-picker-trigger .select-trigger-value { text-align: right; font-size: 12px; }
+
+    .trip-alert { border-radius: 2px 12px 2px 12px; border-left: 3px solid var(--metro-line); }
+    .toast { border: 1px solid var(--line-strong); border-radius: 2px 10px 2px 10px; }
+
+    .picker-layer {
+      position: absolute; inset: 0; z-index: 18; display: flex; align-items: flex-end; justify-content: center;
+      background: rgba(7, 11, 18, .72); animation: picker-fade .2s ease-out;
+    }
+    .picker-layer[hidden] { display: none; }
+    .picker-scrim { position: absolute; inset: 0; }
+    .picker-sheet {
+      position: relative; z-index: 1; width: 100%; max-height: min(78%, 680px); padding: 10px 20px max(18px, env(safe-area-inset-bottom));
+      display: flex; flex-direction: column; overflow: hidden; border-top: 1px solid var(--line-strong);
+      border-radius: 20px 2px 0 0; background: var(--surface); box-shadow: 0 -18px 50px rgba(0,0,0,.36);
+      animation: picker-rise .28s cubic-bezier(.2,.8,.2,1);
+    }
+    .picker-layer[data-compact="true"] .picker-sheet { max-height: min(56%, 390px); }
+    .picker-grab { width: 38px; height: 3px; margin: 1px auto 17px; background: var(--line-strong); }
+    .picker-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .picker-header h2 { margin: 0; font-size: 27px; line-height: 1.2; }
+    .picker-close { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+    .picker-close .ui-icon { width: 18px; height: 18px; }
+    .picker-rule { display: grid; grid-template-columns: 9px 1fr 9px; align-items: center; margin: 17px 0 5px; }
+    .picker-rule span { height: 1px; background: var(--line-strong); }
+    .picker-rule i { width: 9px; height: 9px; border: 2px solid var(--green); border-radius: 50%; }
+    .picker-rule i:last-child { border-color: var(--metro-line); }
+    .picker-options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+    .picker-options::-webkit-scrollbar { display: none; }
+    .picker-option {
+      width: 100%; min-height: 56px; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center;
+      gap: 12px; padding: 11px 5px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+      background: transparent; color: var(--ink); text-align: left; cursor: pointer;
+    }
+    .picker-option-marker { width: 9px; height: 9px; border: 1px solid var(--muted); border-radius: 50%; }
+    .picker-option-label { overflow-wrap: anywhere; font: 700 18px/1.35 "Songti SC", "STSong", serif; }
+    .picker-option-index { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .picker-option.plain .picker-option-index { visibility: hidden; }
+    .picker-option[aria-selected="true"] { background: var(--green-soft); box-shadow: inset 3px 0 0 var(--green); }
+    .picker-option[aria-selected="true"] .picker-option-marker { border-color: var(--green); background: var(--green); box-shadow: 0 0 0 4px var(--green-soft); }
+    .picker-layer[data-tone="destination"] .picker-option[aria-selected="true"] { background: var(--orange-soft); box-shadow: inset 3px 0 0 var(--metro-line); }
+    .picker-layer[data-tone="destination"] .picker-option[aria-selected="true"] .picker-option-marker { border-color: var(--metro-line); background: var(--metro-line); box-shadow: 0 0 0 4px var(--orange-soft); }
+    .phone.picker-open .content { overflow: hidden; }
+    @keyframes picker-fade { from { background: rgba(7,11,18,0); } }
+    @keyframes picker-rise { from { transform: translateY(100%); } to { transform: none; } }
+
+    .arrival-modal-layer { padding: 0; display: flex; align-items: stretch; background: rgba(7,11,18,.86); backdrop-filter: none; }
+    .arrival-modal {
+      width: 100%; max-width: none; max-height: none; min-height: 100%; padding: max(58px, env(safe-area-inset-top)) 26px max(26px, env(safe-area-inset-bottom));
+      display: flex; flex-direction: column; align-items: flex-start; border: 0; border-radius: 0; background: var(--app); text-align: left; box-shadow: none;
+    }
+    .arrival-mark { width: 70px; height: 70px; margin: 24px 0 34px; border: 2px solid var(--metro-line); background: transparent; color: var(--metro-line); box-shadow: none; font-family: "Songti SC", "STSong", serif; }
+    .arrival-modal h2 { max-width: 330px; font-size: 36px; line-height: 1.2; }
+    .arrival-modal p { max-width: 310px; margin: 16px 0 0; font-size: 14px; line-height: 1.8; }
+    .arrival-meta { margin-top: 22px; padding: 11px 0; border: 0; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); border-radius: 0; background: transparent; }
+    .arrival-actions { width: 100%; margin-top: auto; gap: 10px; }
+    .arrival-actions button { min-height: 52px; border-radius: 2px 10px 2px 10px; }
+    .arrival-finish { background: var(--primary); color: var(--primary-ink); }
+
+    @media (max-width: 470px) {
+      .status { display: none; }
+      .header { padding-top: max(15px, env(safe-area-inset-top)); padding-bottom: 14px; }
+      .content { padding-left: 16px; padding-right: 16px; }
+      .picker-sheet { max-height: 82svh; }
+      .picker-layer[data-compact="true"] .picker-sheet { max-height: 58svh; }
+      .bottom { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+    }
+    @media (max-width: 360px) {
+      .home-hero h2, .trip-hero h2 { font-size: 26px; }
+      .line-controls { grid-template-columns: 1fr; gap: 12px; }
+      .journey-sheet { padding-left: 1px; padding-right: 1px; }
+      .picker-sheet { padding-left: 16px; padding-right: 16px; }
+      .arrival-modal { padding-left: 20px; padding-right: 20px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .picker-layer, .picker-sheet { animation: none; }
+      .select-trigger-icon { transition: none; }
+    }
+
+    /* Mobile-first direction: hierarchy, pace and purposeful motion over costume. */
+    .phone { --nav-height: 72px; }
+    body, button, select { font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+    .title, .hero h2, .trip-hero h2, .card-title, .history-heading h2, .picker-header h2, .arrival-modal h2,
+    .hero-station strong, .station-field .select-trigger-value, .picker-option-label, .metric strong, .eta b,
+    #settings .settings-heading h2, #settings .section-label, #settings .settings-section:before {
+      font-family: inherit;
+    }
+    .screen.active { animation: screen-enter .22s ease-out; }
+    @keyframes screen-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
+    .phone { border-radius: 26px; }
+    .header { min-height: 72px; padding: 12px 18px; }
+    .brand { gap: 11px; }
+    .mark { width: 38px; height: 38px; border: 0; border-radius: 8px; background: var(--ink); color: var(--app); font-size: 15px; }
+    .eyebrow { font-size: 10px; font-weight: 650; color: var(--muted); }
+    .title { font-size: 20px; font-weight: 760; }
+    .header .help { width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surface); color: var(--muted); }
+    .content { padding: 0 16px 28px; }
+
+    .home-hero {
+      min-height: 205px; padding: 15px 4px 18px; border: 0; border-radius: 0; background: transparent;
+    }
+    .home-hero:before, .home-hero:after, .trip-hero:after { display: none; }
+    .hero-status-row, .trip-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .data-chip, .line-chip, .trip-live { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+    .data-chip { max-width: calc(100% - 88px); color: var(--muted); }
+    .data-chip small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    .line-chip { padding: 6px 9px; border-radius: 999px; background: var(--orange-soft); color: var(--metro-line); }
+    .line-chip b { color: inherit; font: 750 12px/1 inherit; }
+    .status-beacon, .trip-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: beacon-pulse 2.6s ease-out infinite; }
+    .hero-copy { margin-top: 17px; }
+    .hero-kicker { color: var(--muted); font-size: 11px; font-weight: 650; }
+    .home-hero h2 { max-width: 330px; margin: 4px 0 0; font-size: 28px; line-height: 1.18; font-weight: 790; }
+    .metro-motion { height: 38px; margin: 12px 3px 4px; }
+    .metro-track { top: 19px; height: 2px; border-radius: 999px; background: var(--line-strong); }
+    .metro-track:after { display: none; }
+    .motion-station { top: -4px; width: 10px; height: 10px; border: 2px solid var(--app); background: var(--muted); box-shadow: 0 0 0 1px var(--line-strong); }
+    .motion-station:first-child { background: var(--green); box-shadow: 0 0 0 1px var(--green); }
+    .motion-station:last-child { background: var(--metro-line); box-shadow: 0 0 0 1px var(--metro-line); }
+    .train-runner { top: -12px; left: 51%; width: 28px; height: 28px; animation: none; transform: translateX(-50%); }
+    .train-car { width: 28px; height: 28px; border-radius: 0; background: transparent; box-shadow: none; color: var(--ink); }
+    .train-car:before { content: ""; width: 24px; height: 24px; background: currentColor; -webkit-mask: url("icons/train-front.svg") center / contain no-repeat; mask: url("icons/train-front.svg") center / contain no-repeat; }
+    .train-car:after, .train-car i { display: none; }
+    .metro-motion.route-adjusted .train-runner { animation: route-adjust .48s cubic-bezier(.2,.8,.2,1); }
+    @keyframes route-adjust { from { opacity: .2; transform: translateX(-85%); } to { opacity: 1; transform: translateX(-50%); } }
+    .hero-route-summary { margin-top: 8px; grid-template-columns: minmax(0,1fr) 28px minmax(0,1.15fr); gap: 10px; }
+    .hero-station span { margin-bottom: 4px; color: var(--muted); font-size: 11px; }
+    .hero-station strong { font-size: 20px; line-height: 1.2; font-weight: 780; }
+    .hero-station:first-child strong { color: var(--green); }
+    .hero-station.end strong { color: var(--metro-line); font-size: 24px; }
+    .route-arrow { width: 28px; height: 28px; border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+
+    .journey-sheet { margin: 13px 0 0; padding: 18px 0 24px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+    .journey-sheet .card-head { margin: 0 0 15px; padding: 0; }
+    .journey-sheet .card-head:before { display: none; }
+    .journey-sheet .card-title { font-size: 18px; font-weight: 760; }
+    .sheet-subtitle { margin-top: 3px; font-size: 12px; }
+    .route-badge { gap: 7px; color: var(--muted); font-size: 12px; }
+    .route-badge i { width: 8px; height: 8px; background: var(--metro-line); box-shadow: none; }
+    .line-controls { display: block; }
+    .line-controls > .field:first-child { display: none; }
+    .line-controls > .field:last-child { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 18px; min-height: 56px; padding: 7px 14px; border-radius: 8px; background: var(--surface); }
+    .line-controls > .field:last-child, .station-field, #settings .settings-row:has(.compact-picker-trigger) { position: relative; }
+    .line-controls > .field:last-child label { margin: 0; color: var(--muted); font-size: 12px; }
+    .line-controls .select-trigger { min-height: 42px; padding: 7px 0; border: 0; }
+    .line-controls .select-trigger-value { font-size: 15px; font-weight: 700; }
+    .station-picker { grid-template-columns: 24px minmax(0,1fr); gap: 10px; margin-top: 10px; padding: 4px 14px 4px 8px; border-radius: 8px; background: var(--surface); }
+    .station-rail { padding: 27px 0; }
+    .station-rail:before { top: 31px; bottom: 31px; width: 2px; border-radius: 999px; background: var(--line-strong); }
+    .station-rail i { width: 10px; height: 10px; border: 2px solid var(--surface); }
+    .station-fields { gap: 0; }
+    .station-field { min-height: 64px; padding: 8px 0 6px; }
+    .station-field + .station-field { border-top: 1px solid var(--line); }
+    .station-field label { margin: 0; font-size: 11px; }
+    .station-field .select-trigger { min-height: 42px; padding: 5px 0; border: 0; }
+    .line-controls > .field:last-child .select-trigger:before, .station-field .select-trigger:before, #settings .compact-picker-trigger:before { content: ""; position: absolute; inset: 0; }
+    .station-field .select-trigger-value { font-size: 18px; line-height: 1.25; font-weight: 760; }
+    .station-field:first-child .select-trigger-value { color: var(--green); }
+    .station-field:last-child .select-trigger-value { color: var(--metro-line); }
+    .reminder-inline { margin-top: 12px; padding: 13px 14px 12px; border: 0; border-radius: 8px; background: var(--surface); }
+    .inline-heading { margin-bottom: 8px; }
+    .inline-heading span { font-size: 13px; }
+    .inline-heading small { font-size: 11px; }
+    .reminder-inline .chips { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+    .reminder-inline .chip { min-height: 42px; padding: 7px 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--app); color: var(--muted); font-size: 11px; }
+    .reminder-inline .chip.selected { border-color: var(--green); background: var(--green-soft); color: var(--ink); box-shadow: none; }
+    .sheet-note { margin: 13px 2px 0; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .sheet-note .dot { width: 6px; height: 6px; box-shadow: none; }
+
+    .home-action, .trip-action { display: none; position: absolute; left: 0; right: 0; bottom: var(--nav-height); z-index: 12; padding: 10px 16px 12px; border-top: 1px solid var(--line); background: var(--app); }
+    .phone[data-screen="home"] .home-action { display: block; }
+    .phone[data-screen="trip"] .trip-action { display: block; }
+    .phone[data-screen="home"] .content, .phone[data-screen="trip"] .content { padding-bottom: 92px; }
+    .phone[data-screen="home"] .toast, .phone[data-screen="trip"] .toast { bottom: calc(var(--nav-height) + 84px); }
+    .home-action .primary { min-height: 54px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 8px; font-size: 15px; }
+    .trip-action .adjust { min-height: 54px; margin: 0; border: 0; border-radius: 8px; background: var(--primary); color: var(--primary-ink); font-size: 14px; font-weight: 750; }
+    .trip-action #adjustBtn { margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+    .trip-hero { min-height: 218px; padding: 20px 18px; border: 0; border-radius: 8px; background: var(--surface); }
+    .trip-hero h2 { max-width: 330px; margin: 24px 0 14px; font-size: 29px; line-height: 1.2; font-weight: 790; }
+    .trip-live { color: var(--green); font-size: 11px; }
+    .trip-motion { border-bottom: 2px solid var(--line-strong); }
+    .trip-motion span { display: none; }
+    .trip-motion b { height: 13px; border-radius: 3px; background: var(--ink); }
+    .metric strong { color: var(--green); font-size: 52px; font-weight: 790; }
+    .eta b { color: var(--metro-line); font-size: 19px; font-weight: 760; }
+    #trip > .card { margin-top: 12px; padding: 18px; border: 0; border-radius: 8px; background: var(--surface); box-shadow: none; }
+    #trip > .card .card-head { padding: 0; }
+    #trip > .card .card-head:before { display: none; }
+    #trip > .card .card-title { font-size: 17px; font-weight: 750; }
+    #trip .route-line { height: 3px; margin: 16px 0; border-radius: 999px; }
+    #trip .stop { min-height: 46px; }
+    #trip .stop.current { color: var(--green); }
+    #trip .bell { color: var(--metro-line); }
+    #trip .adjust { min-height: 50px; border-radius: 8px; }
+    #adjustBtn { min-height: 54px; margin-top: 16px; border: 0; background: var(--primary); color: var(--primary-ink); font-size: 14px; font-weight: 750; }
+    #previewAlertBtn { margin-top: 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); }
+    #trip > .confidence { margin-top: 12px; padding: 13px 14px; border: 0; border-radius: 8px; background: var(--orange-soft); color: var(--muted); }
+    #trip > .card .settings-row { padding: 0; border: 0; }
+    #endBtn { min-height: 50px; border: 1px solid var(--metro-line); border-radius: 8px; background: transparent; color: var(--metro-line); }
+
+    #settings { padding-bottom: 18px; }
+    #settings .settings-heading { display: block; padding: 15px 2px 8px; }
+    #settings .settings-heading h2 { margin: 0; padding: 0; font-size: 28px; line-height: 1.15; font-weight: 790; }
+    #settings .settings-heading h2:before, #settings .settings-signature { display: none; }
+    #settings .settings-heading > span { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; text-align: left; }
+    #settings .settings-section { display: block; margin-top: 26px; }
+    #settings .settings-heading + .settings-section { margin-top: 20px; }
+    #settings .settings-section:before { display: none; }
+    #settings .section-label { margin: 0 2px 9px; color: var(--muted); font-size: 12px; font-weight: 720; }
+    #settings .settings-card { margin: 0; padding: 0 14px; overflow: hidden; border: 0; border-radius: 8px; background: var(--surface); box-shadow: none; }
+    #settings .settings-row { min-height: 64px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+    #settings .settings-row:last-child { border-bottom: 0; }
+    #settings .settings-row.column { gap: 13px; padding-top: 15px; padding-bottom: 15px; }
+    #settings .row-main { flex: 1 1 auto; gap: 11px; }
+    #settings .row-copy b { font-size: 14px; font-weight: 700; }
+    #settings .subline { font-size: 11px; line-height: 1.5; }
+    #settings .iconbox { width: 32px; height: 32px; border-radius: 8px; background: var(--surface-soft); color: var(--muted); }
+    #settings .iconbox .ui-icon { width: 17px; height: 17px; }
+    #settings .theme-picker { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; width: 100%; border: 0; background: transparent; }
+    #settings .theme-option { min-height: 82px; padding: 9px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--app); text-align: center; }
+    #settings .theme-option:last-child { border-bottom: 1px solid var(--line); }
+    #settings .theme-option:after { display: none; }
+    #settings .theme-option.selected { border-color: var(--green); background: var(--green-soft); box-shadow: none; color: var(--ink); }
+    #settings .theme-swatch { width: 44px; height: 27px; border-radius: 6px; }
+    #settings .alert-mode-picker { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; width: 100%; border: 0; background: transparent; }
+    #settings .alert-mode-option { min-height: 60px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--app); }
+    #settings .alert-mode-option:last-child { border-bottom: 1px solid var(--line); }
+    #settings .alert-mode-option:after { display: none; }
+    #settings .alert-mode-option.selected { border-color: var(--green); background: var(--green-soft); box-shadow: none; }
+    #settings .compact-picker-trigger { width: auto; min-width: 124px; max-width: 52%; padding: 8px 0 8px 8px; border: 0; }
+    #settings .compact-picker-trigger .select-trigger-value { text-align: right; font-size: 12px; }
+    #settings .switch { width: 48px; height: 28px; padding: 3px; }
+    #settings .switch i { width: 22px; height: 22px; }
+    #settings .switch.on i { transform: translateX(20px); }
+    #settings .status-pill { min-height: 30px; padding: 5px 8px; border: 0; border-radius: 999px; font-size: 10px; }
+    #settings .status-pill:before { display: none; }
+    #settings .settings-details p { margin: 0 0 15px 43px; font-size: 12px; }
+
+    .history-heading { padding: 15px 2px 8px; border: 0; }
+    .history-heading:after, .history-signature { display: none; }
+    .history-heading h2 { margin: 0; padding: 0; border: 0; font-size: 28px; line-height: 1.15; font-weight: 790; }
+    #history .card { margin-top: 18px !important; padding: 18px; border: 0; border-radius: 8px; background: var(--surface); box-shadow: none; }
+    #history .card + .card { margin-top: 10px !important; }
+    #history .card-title { font-size: 17px; font-weight: 740; }
+    .history-empty-route { margin: 24px 2px 20px; }
+    .history-empty-route span { height: 2px; }
+    .history-start { width: 100%; min-height: 48px; margin-top: 18px; border: 0; border-radius: 8px; background: var(--primary); color: var(--primary-ink); font-weight: 720; cursor: pointer; }
+
+    .bottom { height: var(--nav-height); flex: 0 0 var(--nav-height); margin: 0; padding: 7px 8px 8px; gap: 2px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: var(--nav); box-shadow: none; }
+    .nav { min-width: 0; flex: 1 1 0; gap: 4px; border-radius: 8px; font-size: 10px; }
+    .nav.active { background: var(--surface-soft); color: var(--ink); transform: none; }
+    .nav.active .nav-icon { color: var(--green); }
+    .nav.active:after { display: none; }
+
+    .trip-alert { border: 0; border-radius: 8px; background: var(--surface); box-shadow: 0 14px 36px rgba(0,0,0,.32); }
+    .trip-alert-icon { background: var(--primary); color: var(--primary-ink); }
+    .toast { z-index: 25; border: 0; border-radius: 8px; }
+    .picker-sheet { padding: 9px 18px max(18px,env(safe-area-inset-bottom)); border: 0; border-radius: 18px 18px 0 0; background: var(--surface); }
+    .picker-header h2 { font-size: 24px; font-weight: 780; }
+    .picker-rule { display: none; }
+    .picker-header { padding-bottom: 10px; }
+    .picker-option { min-height: 58px; grid-template-columns: 22px minmax(0,1fr); gap: 10px; padding: 11px 8px; }
+    .picker-option-label { font-size: 16px; font-weight: 680; }
+    .picker-option-index { display: none; }
+    .picker-option[aria-selected="true"] { border-radius: 8px; background: var(--green-soft); box-shadow: none; }
+    .picker-layer[data-tone="destination"] .picker-option[aria-selected="true"] { background: var(--orange-soft); box-shadow: none; }
+    .arrival-modal h2 { font-size: 34px; font-weight: 790; }
+    .arrival-actions button { border-radius: 8px; }
+
+    @media (max-width: 470px) {
+      .phone { --nav-height: calc(70px + env(safe-area-inset-bottom)); border-radius: 0; }
+      .status { display: none; }
+      .header { min-height: calc(68px + env(safe-area-inset-top)); padding-top: max(12px,env(safe-area-inset-top)); }
+      .content { padding-left: 14px; padding-right: 14px; }
+      .bottom { padding-bottom: max(8px,env(safe-area-inset-bottom)); }
+      .home-action, .trip-action { padding-left: 14px; padding-right: 14px; }
+      .picker-sheet { max-height: 82svh; }
+      .picker-layer[data-compact="true"] .picker-sheet { max-height: 58svh; }
+    }
+    @media (max-width: 360px) {
+      .header { padding-left: 14px; padding-right: 14px; }
+      .home-hero h2 { font-size: 25px; }
+      .hero-station strong { font-size: 18px; }
+      .hero-station.end strong { font-size: 21px; }
+      .reminder-inline .chip { font-size: 10px; }
+      #settings .settings-card { padding-left: 12px; padding-right: 12px; }
+      #settings .settings-section { grid-template-columns: none; }
+      .arrival-modal { padding-left: 20px; padding-right: 20px; }
+      .simulation-actions { grid-template-columns: 1fr; align-items: stretch; }
+      .simulation-speed { justify-content: space-between; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .screen.active, .metro-motion.route-adjusted .train-runner, .status-beacon, .trip-live i, .stop.current:before { animation: none; }
+    }
+
+    /* System typography: SF/PingFang on Apple devices, native sans fallbacks elsewhere. */
+    :root {
+      --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+      --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    }
+    body, button, select {
+      font-family: var(--font-ui);
+      font-synthesis: none;
+      font-kerning: normal;
+      font-optical-sizing: auto;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .eyebrow, .hero-kicker, .date, .picker-option-index { font-family: var(--font-ui); }
+    .title, .hero h2, .trip-hero h2, .card-title, .history-heading h2, .picker-header h2, .arrival-modal h2,
+    .hero-station strong, .station-field .select-trigger-value, .metric strong, .eta b,
+    .arrival-mark, #settings .settings-heading h2, #settings .section-label, #settings .settings-section:before {
+      font-family: var(--font-display) !important;
+    }
+    .title { font-weight: 600; letter-spacing: 0; }
+    .home-hero h2, .trip-hero h2, #settings .settings-heading h2, .history-heading h2, .arrival-modal h2 {
+      font-weight: 600; letter-spacing: 0;
+    }
+    html[lang="en"] .title { letter-spacing: -.01em; }
+    html[lang="en"] .home-hero h2, html[lang="en"] .trip-hero h2, html[lang="en"] #settings .settings-heading h2,
+    html[lang="en"] .history-heading h2, html[lang="en"] .picker-header h2, html[lang="en"] .arrival-modal h2 { letter-spacing: -.02em; }
+    .hero-station strong, .station-field .select-trigger-value { font-weight: 600; letter-spacing: 0; }
+    .hero-station strong { font-size: 20px; line-height: 1.25; }
+    .hero-station.end strong { font-size: 24px; }
+    .station-field .select-trigger-value { font-size: 18px; line-height: 1.25; }
+    .line-chip b { font: 600 12px/1 var(--font-ui); }
+    .journey-sheet .card-title, #trip > .card .card-title, #history .card-title { font-weight: 600; }
+    .metric strong { font-weight: 600; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+    .eta b { font-weight: 600; font-variant-numeric: tabular-nums; }
+    #settings .section-label { font-weight: 600; letter-spacing: .01em; }
+    #settings .row-copy b, .line-controls .select-trigger-value, .inline-heading span, .simulation-row .row-copy b { font-weight: 500; }
+    .picker-header h2 { font-weight: 600; letter-spacing: 0; }
+    .picker-option-label { font-family: var(--font-ui); font-weight: 500; letter-spacing: 0; }
+    .primary, .history-start, .trip-action .adjust, #adjustBtn, .arrival-actions button { font-weight: 600; }
+    .nav.active { font-weight: 500; }
+    .subline, .muted, .sheet-note, .simulation-status { font-weight: 400; }
+    .mark, .trip-alert-icon, .arrival-mark { font-weight: 600; }
+    .stop.current { font-weight: 600; }
+    .pwa-note { font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+    .pwa-note h3 { margin: 0 0 8px; font-size: 16px; }
+    .pwa-note p { margin: 8px 0; }
+    .pwa-note label { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0; }
+    .pwa-note input { flex: 0 0 auto; width: 20px; height: 20px; }
+    .pwa-note button { min-height: 44px; }
+    .pwa-note .warn { color: var(--muted); }
+    #storageStatus:not(:empty) { color: var(--danger); padding: 10px 14px; }
+    .simulation-control[hidden] { display: none; }
+    .arrival-modal { max-height: 90dvh; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <main class="shell"><section class="phone" data-screen="home">
+    <header class="header"><div class="brand"><div class="mark" data-i18n="brandMark">到</div><div><div class="eyebrow">TAIYUAN METRO</div><div class="title" data-i18n="brand">到站啦</div></div></div><button class="help" id="helpBtn" aria-label="帮助"><span class="ui-icon icon-help" aria-hidden="true"></span></button></header>
+    <div class="content">
+      <section class="screen active" id="home">
+        <div class="card pwa-note">
+          <h3>本地行程 / 真实前台定位观察</h3>
+          <p>太原地铁 2 号线 · 无需电脑后端。当前定位仅观察，不会自动推进；请在经过车站后人工确认。</p>
+          <label><input id="enableForegroundLocation" type="checkbox" /><span>开始时启用前台定位。我同意仅在本机即时处理位置以判断定位质量；不上传、不保存经纬度或轨迹。拒绝不影响人工行程。</span></label>
+          <label><input id="simulationEntry" type="checkbox" /><span>独立模拟测试行程（不启用真实定位，定时推进仅为演示）</span></label>
+          <p>请保持页面前台和屏幕亮起。仅支持网页前台提醒，不保证后台、锁屏或系统级闹钟必达。</p>
+        </div>
+        <div class="hero home-hero">
+          <div class="hero-status-row"><span class="data-chip"><i class="status-beacon"></i><small id="dataStatus" data-i18n="connecting">正在连接本地服务…</small></span><span class="line-chip"><b data-i18n="lineBadge">2号线</b></span></div>
+          <div class="hero-copy"><span class="hero-kicker" data-i18n="estimatedReminder">预计提醒</span><h2 data-i18n="homeTitle">设置你的下车提醒</h2></div>
+          <div class="metro-motion" id="metroMotion" aria-hidden="true"><div class="metro-track"><i class="motion-station station-one"></i><i class="motion-station station-two"></i><i class="motion-station station-three"></i><i class="motion-station station-four"></i><span class="train-runner"><span class="train-car"><i></i><i></i><i></i></span></span></div></div>
+          <div class="hero-route-summary"><div class="hero-station"><span data-i18n="boardingStation">上车站</span><strong id="heroFrom">胜利街</strong></div><span class="route-arrow" aria-hidden="true"><i class="ui-icon icon-navigation"></i></span><div class="hero-station end"><span data-i18n="destination">目标站</span><strong id="heroTo">尖草坪</strong></div></div>
+        </div>
+        <div class="journey-sheet">
+          <div class="card-head"><div><div class="card-title" data-i18n="chooseTrip">选择行程</div><span class="sheet-subtitle" data-i18n="taiyuanMetro">太原地铁</span></div><span class="route-badge"><i></i><span data-i18n="lineBadge">2号线</span></span></div>
+          <div class="line-controls"><div class="field"><label data-i18n="line">线路</label><select class="select" id="lineSelect" disabled><option data-i18n="loading">加载中…</option></select></div><div class="field"><label data-i18n="direction">方向</label><select class="select" id="directionSelect" disabled><option data-i18n="loading">加载中…</option></select></div></div>
+          <div class="station-picker"><div class="station-rail" aria-hidden="true"><i></i><span></span><i></i></div><div class="station-fields"><div class="field station-field"><label data-i18n="boardingStation">上车站</label><select class="select" id="fromSelect" disabled><option data-i18n="loading">加载中…</option></select></div><div class="field station-field"><label data-i18n="destination">目标站</label><select class="select" id="toSelect" disabled><option data-i18n="loading">加载中…</option></select></div></div></div>
+          <div class="reminder-inline"><div class="inline-heading"><span data-i18n="thisReminder">本次提醒</span><small data-i18n="adjustAnytime">可随时调整</small></div><div class="chips" id="reminderChips"><button class="chip selected" data-value="1"></button><button class="chip" data-value="2"></button><button class="chip" data-value="0"></button></div></div>
+          <div class="confidence sheet-note"><i class="dot"></i><span data-i18n="homeConfidence">预计提醒依据站序、官网静态时刻和手动校正。</span></div>
+        </div>
+      </section>
+      <section class="screen" id="trip">
+        <div class="card pwa-note" aria-live="polite">
+          <h3 id="tripWorkMode">本地人工进度 / 定位观察</h3>
+          <p id="foregroundLocationState">尚未启用定位</p><p id="locationAccuracy"></p>
+          <p>当前定位仅观察，不会自动推进。站点坐标系待核验；剩余用时为按人工进度计算的计划时长，不是实时 ETA。</p>
+          <button class="adjust" id="locationToggleBtn" type="button">启用前台定位</button>
+          <p id="effectStatus">正常模式尝试声音和震动；请先测试提醒。</p>
+          <p id="wakeStatus">请保持屏幕亮起。</p>
+          <p>仅支持网页前台提醒，不保证后台、锁屏或系统级闹钟必达。</p>
+        </div>
+        <div class="hero trip-hero"><div class="trip-hero-top"><small id="tripLine">2号线 · 西桥方向</small><span class="trip-live"><i></i><span data-i18n="navActive">进行中</span></span></div><h2 id="tripTarget">准备下车｜长风街</h2><div class="trip-motion" id="tripMotion" aria-hidden="true"><span></span><i></i><i></i><i></i><b></b></div><div class="hero-row"><div class="metric"><strong id="stopsLeft">3</strong><span>站</span></div><div class="eta"><b id="etaText">约 8 分钟</b><div id="arrivalText">演示估算</div></div></div></div>
+        <div class="trip-alert" id="tripAlertBanner" role="alert" aria-live="assertive" hidden><div class="trip-alert-icon"><span class="ui-icon icon-bell" aria-hidden="true"></span></div><div class="trip-alert-copy"><strong id="tripAlertTitle"></strong><span id="tripAlertMessage"></span></div><button class="trip-alert-dismiss" id="dismissAlertBtn" type="button" aria-label="关闭提醒"><span class="ui-icon icon-x" aria-hidden="true"></span></button></div>
+        <div class="card"><div class="card-head"><div class="card-title" data-i18n="tripProgress">行程进度</div><span class="muted" id="updateTime" data-i18n="justUpdated">刚刚更新</span></div><div class="route-line" id="progressBar"></div><div class="route-stations"><span id="currentLabel">通达桥</span><b id="nextLabel">长风街</b></div><div class="timeline" id="timeline"></div><div class="simulation-control"><div class="simulation-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-play" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="simulationMode">模拟自动推进</b><span class="subline" data-i18n="simulationHint">仅用于前台演示，不代表实时列车位置</span></div></div><button class="switch" id="simulationToggle" type="button" aria-pressed="false"><i></i></button></div><div class="simulation-actions"><span class="simulation-status" id="simulationStatus" aria-live="polite">已暂停 · 演示不代表实时位置</span><label class="simulation-speed"><span data-i18n="simulationSpeed">推进速度</span><select class="compact-select" id="simulationSpeedSelect"></select></label></div></div><button class="adjust preview" id="previewAlertBtn" type="button"><span class="ui-icon icon-bell" aria-hidden="true"></span> <span data-i18n="previewArrival">预览到站提醒</span></button></div>
+        <div class="confidence warn" id="confidenceBox"><i class="dot"></i><span><b>中等可信度</b> · 使用静态站序和演示时间估算</span></div>
+        <div class="card"><div class="card-head"><div class="card-title" data-i18n="thisReminder">本次提醒</div><span class="muted" id="reminderSummary">提前 1 站</span></div><div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-bell" aria-hidden="true"></span></div><div class="row-copy"><b id="tripAlertModeLabel">弹窗 + 铃声</b><span class="subline" id="tripAlertModeHint">到站先弹窗，再播放铃声</span></div></div><span class="status-pill ok" id="tripAlertStatus">正常</span></div></div>
+        <button class="adjust" id="endBtn" style="margin-top:12px" data-i18n="endTrip">结束本次行程</button>
+      </section>
+      <section class="screen" id="settings">
+        <div class="card pwa-note">
+          <h3>主屏幕网页应用</h3>
+          <p>iPhone Safari 打开 HTTPS 网址 → 分享 → 添加到主屏幕。首次缓存完成后，可离线打开。</p>
+          <p id="cacheStatus" role="status">正在检查离线缓存…</p>
+          <button id="updateAppBtn" class="adjust" type="button" hidden>应用新版本（先结束行程）</button>
+          <p>只保存当前行程、提醒去重状态和偏好。定位数据仅在内存中即时使用，不保存轨迹、不自动上传。</p>
+          <button id="clearLocalTripBtn" class="adjust" type="button">清除本机当前行程</button>
+        </div>
+        <div class="settings-heading"><h2 data-i18n="settings">设置</h2><span data-i18n="savedOnDevice">偏好保存在此设备</span></div>
+
+        <div class="settings-section">
+          <div class="section-label" data-i18n="appearanceLanguage">外观与语言</div>
+          <div class="card settings-card">
+            <div class="settings-row column">
+              <div class="row-main"><div class="iconbox"><span class="ui-icon icon-monitor" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="theme">主题颜色</b><span class="subline" id="themeSummary">跟随系统</span></div></div>
+              <div class="theme-picker" role="radiogroup" aria-label="主题颜色">
+                <button class="theme-option" type="button" data-theme-value="dark" role="radio" aria-checked="false"><span class="theme-swatch theme-swatch-dark" aria-hidden="true"></span><span data-i18n="themeDark">暗色</span></button>
+                <button class="theme-option" type="button" data-theme-value="light" role="radio" aria-checked="false"><span class="theme-swatch theme-swatch-light" aria-hidden="true"></span><span data-i18n="themeLight">白色</span></button>
+                <button class="theme-option" type="button" data-theme-value="system" role="radio" aria-checked="true"><span class="theme-swatch theme-swatch-system" aria-hidden="true"></span><span data-i18n="themeSystem">跟随系统</span></button>
+              </div>
+            </div>
+            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-languages" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="language">语言</b><span class="subline" data-i18n="languageHint">界面显示语言</span></div></div><select class="compact-select" id="languageSelect" aria-label="语言"></select></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-label" data-i18n="reminderPreferences">提醒偏好</div>
+          <div class="card settings-card">
+            <div class="settings-row column"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-bell" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="arrivalAlertMode">到站提醒模式</b><span class="subline" data-i18n="arrivalAlertModeHint">选择到站时的提醒方式</span></div></div><div class="alert-mode-picker" id="alertModePicker" role="radiogroup" aria-label="到站提醒模式"><button class="alert-mode-option selected" type="button" data-alert-mode="normal" role="radio" aria-checked="true"><b data-i18n="normalMode">正常模式</b><span data-i18n="normalModeHint">弹窗 + 铃声</span></button><button class="alert-mode-option" type="button" data-alert-mode="silent" role="radio" aria-checked="false"><b data-i18n="silentMode">静音模式</b><span data-i18n="silentModeHint">仅弹窗</span></button></div></div>
+            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-flag" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="defaultTiming">默认提醒时机</b><span class="subline" data-i18n="nextTripHint">用于下一次新行程</span></div></div><select class="compact-select" id="defaultReminderSelect" aria-label="默认提醒时机"></select></div>
+            <div class="settings-row" id="vibrationSettingRow"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-volume" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="vibrationReminder">震动提醒</b><span class="subline" data-i18n="vibrationHint">适合戴耳机或嘈杂环境</span></div></div><button class="switch" id="vibrationSetting" type="button" data-pref="vibration" aria-pressed="false"><i></i></button></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-label" data-i18n="permissionsRuntime">权限与运行</div>
+          <div class="card settings-card">
+            <button class="settings-row action" id="locationPermission" type="button"><span class="row-main"><span class="iconbox"><span class="ui-icon icon-pin" aria-hidden="true"></span></span><span class="row-copy"><b data-i18n="locationPermission">定位权限</b><span class="subline" data-i18n="locationPermissionHint">辅助判断所在区间</span></span></span><span class="status-pill" id="locationStatus" data-i18n="check">检查</span></button>
+            <button class="settings-row action" id="notificationPermission" type="button"><span class="row-main"><span class="iconbox"><span class="ui-icon icon-bell" aria-hidden="true"></span></span><span class="row-copy"><b data-i18n="notificationPermission">通知权限</b><span class="subline" id="notificationPermissionHint" data-i18n="notificationPermissionHint">用于页面外的提醒提示</span></span></span><span class="status-pill" id="notificationStatus" data-i18n="check">检查</span></button>
+            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-monitor" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="backgroundLock">后台与锁屏提醒</b><span class="subline" data-i18n="backgroundLockHint">演示版建议保持前台运行</span></div></div><span class="status-pill warn" data-i18n="foregroundFirst">前台优先</span></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-label" data-i18n="dataPrivacy">数据与隐私</div>
+          <div class="card settings-card">
+            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-navigation" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="locationData">位置数据</b><span class="subline" data-i18n="locationDataHint">仅用于判断当前行程进度</span></div></div><span class="status-pill" data-i18n="notPersisted">不持久保存</span></div>
+            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-reset" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="localPreferences">本地偏好</b><span class="subline" data-i18n="localPreferencesHint">主题、语言与提醒选项</span></div></div><button class="text-button danger" id="resetPreferences" type="button" data-i18n="reset">重置</button></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-label" data-i18n="about">关于</div>
+          <div class="card settings-card">
+            <a class="settings-row settings-link" href="https://www.tymetro.ltd/" target="_blank" rel="noreferrer"><span class="row-main"><span class="iconbox"><span class="ui-icon icon-route" aria-hidden="true"></span></span><span class="row-copy"><b data-i18n="dataSource">线路数据来源</b><span class="subline" id="settingsDataSource">太原地铁官网静态数据</span></span></span><span class="chevron" aria-hidden="true"><span class="ui-icon icon-arrow"></span></span></a>
+            <details class="settings-details"><summary class="settings-row"><span class="row-main"><span class="iconbox"><span class="ui-icon icon-help" aria-hidden="true"></span></span><span class="row-copy"><b data-i18n="howItWorks">提醒工作原理</b><span class="subline" data-i18n="howItWorksHint">预计提醒的依据与限制</span></span></span><span class="chevron" aria-hidden="true"><span class="ui-icon icon-arrow"></span></span></summary><p class="muted" data-i18n="howItWorksBody">到站啦会结合站序、计划用时和人工校正估算进度。当前版本不依赖隧道内定位，因此它是下车提示，不是系统闹钟。</p></details>
+            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-train" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="version">版本</b><span class="subline">0.5.0</span></div></div><span class="status-pill" data-i18n="localMode">本地版</span></div>
+          </div>
+        </div>
+      </section>
+      <section class="screen" id="history">
+        <div class="history-heading"><h2 data-i18n="navHistory">历史</h2></div>
+        <div class="card"><div class="card-head"><div class="card-title" data-i18n="recentTrips">最近行程</div><span class="muted" data-i18n="historyNotSaved">暂无记录</span></div><p class="muted" style="line-height:1.7;margin:20px 0 0" data-i18n="historyEmpty">这里暂时没有可显示的行程。</p><button class="history-start" id="historyStartBtn" type="button" data-i18n="historyAction">设置下一段行程</button></div>
+        <div class="card"><div class="card-head"><div class="card-title" data-i18n="tip">小提示</div></div><p class="muted" style="line-height:1.7;margin:0" data-i18n="historyTip">当前没有实时列车位置，请在经过车站后手动校正进度。</p></div>
+      </section>
+    </div>
+    <div id="storageStatus" class="pwa-note" role="status"></div>
+    <div class="home-action"><button class="primary" id="startBtn" disabled><span data-i18n="loadingData">正在加载数据…</span><i class="ui-icon icon-arrow" aria-hidden="true"></i></button></div>
+    <div class="trip-action"><button class="adjust" id="adjustBtn" type="button"><span class="ui-icon icon-advance" id="adjustIcon" aria-hidden="true"></span><span id="adjustLabel" data-i18n="passedStation">我刚刚经过一站</span></button></div>
+    <nav class="bottom"><button class="nav active" data-screen="home"><span class="nav-icon icon-route"></span><span data-i18n="navTripSetup">设置行程</span></button><button class="nav" data-screen="trip"><span class="nav-icon icon-active"></span><span data-i18n="navActive">进行中</span></button><button class="nav" data-screen="history"><span class="nav-icon icon-history"></span><span data-i18n="navHistory">历史</span></button><button class="nav" data-screen="settings"><span class="nav-icon icon-settings"></span><span data-i18n="navSettings">设置</span></button></nav><div class="toast" id="toast" data-i18n="updated">已更新</div>
+    <div class="picker-layer" id="pickerLayer" data-tone="origin" data-compact="false" hidden>
+      <div class="picker-scrim" id="pickerScrim" aria-hidden="true"></div>
+      <section class="picker-sheet" role="dialog" aria-modal="true" aria-labelledby="pickerTitle">
+        <div class="picker-grab" aria-hidden="true"></div>
+        <header class="picker-header"><h2 id="pickerTitle"></h2><button class="picker-close" id="pickerClose" type="button"><span class="ui-icon icon-x" aria-hidden="true"></span></button></header>
+        <div class="picker-options" id="pickerOptions" role="listbox" aria-labelledby="pickerTitle"></div>
+      </section>
+    </div>
+    <div class="arrival-modal-layer" id="arrivalModalLayer" hidden><section class="arrival-modal" role="alertdialog" aria-modal="true" aria-labelledby="arrivalModalTitle" aria-describedby="arrivalModalMessage"><div class="arrival-mark" aria-hidden="true">到</div><h2 id="arrivalModalTitle"></h2><p id="arrivalModalMessage"></p><div class="arrival-meta" id="arrivalModalMeta"></div><div class="arrival-actions"><button class="arrival-later" id="arrivalDismissBtn" type="button" data-i18n="stayOnTrip">留在行程</button><button class="arrival-finish" id="arrivalFinishBtn" type="button" data-i18n="finishTrip">结束行程</button></div></section></div>
+  </section></main>
+  <script src="./pwa/core.js"></script>
+  <script src="./pwa/location-controller.js"></script>
+  <script src="./pwa/trip-store.js"></script>
+  <script>
+    const dictionaries={
+      'zh-CN':{
+        brandMark:'到',brand:'到站啦',connecting:'正在连接本地服务…',homeTitle:'设置你的下车提醒',lineBadge:'2号线',estimatedReminder:'预计提醒',heroHint:'提前一站，更从容',chooseTrip:'选择行程',taiyuanMetro:'太原地铁',line:'线路',direction:'方向',boardingStation:'上车站',destination:'目标站',loading:'加载中…',loadingData:'正在加载数据…',thisReminder:'本次提醒',adjustAnytime:'可随时调整',homeConfidence:'预计提醒依据站序、官网静态时刻和手动校正。',tripProgress:'行程进度',justUpdated:'刚刚更新',passedStation:'我刚刚经过一站',soundVibration:'声音 + 震动',arrivalCue:'到提醒点时播放渐强提示',endTrip:'结束本次行程',settings:'设置',savedOnDevice:'偏好保存在此设备',appearanceLanguage:'外观与语言',theme:'主题颜色',themeDark:'暗色',themeLight:'白色',themeSystem:'跟随系统',language:'语言',languageHint:'界面显示语言',reminderPreferences:'提醒偏好',defaultTiming:'默认提醒时机',nextTripHint:'用于下一次新行程',soundReminder:'声音提醒',soundHint:'渐强提示音',vibrationReminder:'震动提醒',vibrationHint:'适合戴耳机或嘈杂环境',earlyWhenUnstable:'低可信度时提前提醒',earlyWhenUnstableHint:'估算不稳定时额外提前一站',permissionsRuntime:'权限与运行',locationPermission:'定位权限',locationPermissionHint:'当前仅检查权限，尚未用于行程推进',notificationPermission:'通知权限',notificationPermissionHint:'用于页面外的提醒提示',check:'检查',backgroundLock:'后台与锁屏提醒',backgroundLockHint:'演示版建议保持前台运行',foregroundFirst:'前台优先',dataPrivacy:'数据与隐私',locationData:'位置数据',locationDataHint:'当前版本不上传或持久保存定位',notPersisted:'不持久保存',localPreferences:'本地偏好',localPreferencesHint:'主题、语言与提醒选项',reset:'重置',about:'关于',dataSource:'线路数据来源',howItWorks:'提醒工作原理',howItWorksHint:'预计提醒的依据与限制',howItWorksBody:'当前版本依据站序、官网静态时刻和人工校正估算进度，尚未接入实时列车位置或到站时间，因此它是下车提示，不是系统闹钟。',version:'版本',demo:'演示版',recentTrips:'最近行程',historyNotSaved:'暂未保存',historyEmpty:'当前 2 号线版本不保存历史行程。接入应用数据库后，这里会展示真实完成的行程。',tip:'小提示',historyTip:'当前没有实时列车位置，请在经过车站后手动校正进度。',navTripSetup:'设置行程',navActive:'进行中',navHistory:'历史',navSettings:'设置',updated:'已更新',startTrip:'开始行程',backendOffline:'后端未连接',creatingTrip:'正在创建行程…',officialStatic:'官网静态数据',notRealtime:'非实时',enabled:'已开启',disabled:'已关闭',requestPermission:'点击检查',permissionUnsupported:'当前浏览器不支持',permissionPrompt:'使用时询问',permissionGranted:'已开启',permissionDenied:'未开启',permissionChecking:'检查中',preferencesReset:'设置已重置',themeChanged:'主题已切换',languageChanged:'语言已更新',settingSaved:'设置已保存',tripRequired:'请先开始一段行程',tripCreated:'后端行程已创建',tripEnded:'本次行程已结束',advanced:'已前进一站',reminderRange:'已进入提醒范围',staticEstimate:'静态数据演示估算',mediumConfidence:'中等可信度',arrived:'已到达',arrivedTitle:'已到达',prepareTitle:'准备下车',estimatedMinutes:'约 {min}–{max} 分钟',remindBefore:'提前 {count} 站',arrivalReminder:'到站提醒',sourceOfficial:'太原地铁官网静态数据',sourceFallback:'本地缓存数据',helpToast:'当前为静态数据演示，未接实时列车数据库',serviceToast:'请通过本地服务打开原型',themeNameDark:'暗色',themeNameLight:'白色',themeNameSystem:'跟随系统',languageSystem:'跟随系统',languageChinese:'简体中文',languageEnglish:'English',confirmReset:'再次点击确认重置',resetDone:'本地偏好已重置',notificationUnavailable:'浏览器通知不可用',locationNeedsApp:'当前版本尚未使用定位推进行程',permissionOpen:'已开启',permissionClosed:'未开启'
+      },
+      'en':{
+        brandMark:'Arr',brand:'Arrive',connecting:'Connecting to local service…',homeTitle:'Set your arrival reminder',lineBadge:'Line 2',estimatedReminder:'Estimated alert',heroHint:'One stop early, more time',chooseTrip:'Choose a trip',taiyuanMetro:'Taiyuan Metro',line:'Line',direction:'Direction',boardingStation:'Boarding',destination:'Destination',loading:'Loading…',loadingData:'Loading data…',thisReminder:'This trip alert',adjustAnytime:'Adjust anytime',homeConfidence:'Estimated alerts use station order, the official static schedule, and manual progress.',tripProgress:'Trip progress',justUpdated:'Updated just now',passedStation:'I just passed a station',soundVibration:'Sound + vibration',arrivalCue:'A rising alert plays at the reminder point',endTrip:'End this trip',settings:'Settings',savedOnDevice:'Preferences saved on this device',appearanceLanguage:'APPEARANCE & LANGUAGE',theme:'Theme',themeDark:'Dark',themeLight:'Light',themeSystem:'System',language:'Language',languageHint:'App display language',reminderPreferences:'ALERT PREFERENCES',defaultTiming:'Default alert timing',nextTripHint:'Applied to your next trip',soundReminder:'Sound alert',soundHint:'Rising alert tone',vibrationReminder:'Vibration',vibrationHint:'Useful with headphones or noise',earlyWhenUnstable:'Alert early at low confidence',earlyWhenUnstableHint:'One extra stop when the estimate is unstable',permissionsRuntime:'PERMISSIONS & RUNTIME',locationPermission:'Location access',locationPermissionHint:'Permission check only; not used to advance trips yet',notificationPermission:'Notification access',notificationPermissionHint:'Alerts when the page is not visible',check:'Check',backgroundLock:'Background & lock-screen alerts',backgroundLockHint:'Keep this prototype in the foreground',foregroundFirst:'Foreground first',dataPrivacy:'DATA & PRIVACY',locationData:'Location data',locationDataHint:'This version does not upload or persist location',notPersisted:'Not persisted',localPreferences:'Local preferences',localPreferencesHint:'Theme, language and alert options',reset:'Reset',about:'ABOUT',dataSource:'Route data source',howItWorks:'How alerts work',howItWorksHint:'Inputs and limits of estimated alerts',howItWorksBody:'This version estimates progress from station order, the official static schedule, and manual correction. Live train positions and arrival times are not connected, so this is a travel cue rather than a system alarm.',version:'Version',demo:'Prototype',recentTrips:'Recent trips',historyNotSaved:'Not saved yet',historyEmpty:'This Line 2 version does not save trip history. Completed trips will appear here after an app database is added.',tip:'Tip',historyTip:'Live train positions are unavailable. Update progress manually after passing each station.',navTripSetup:'Trip',navActive:'Active',navHistory:'History',navSettings:'Settings',updated:'Updated',startTrip:'Start trip',backendOffline:'Backend offline',creatingTrip:'Creating trip…',officialStatic:'Official static data',notRealtime:'not real-time',enabled:'On',disabled:'Off',requestPermission:'Tap to check',permissionUnsupported:'Not supported here',permissionPrompt:'Ask when used',permissionGranted:'Enabled',permissionDenied:'Disabled',permissionChecking:'Checking',preferencesReset:'Settings reset',themeChanged:'Theme changed',languageChanged:'Language updated',settingSaved:'Setting saved',tripRequired:'Start a trip first',tripCreated:'Trip created',tripEnded:'Trip ended',advanced:'Advanced one station',reminderRange:'Now in alert range',staticEstimate:'Static data estimate',mediumConfidence:'Medium confidence',arrived:'Arrived',arrivedTitle:'Arrived',prepareTitle:'Get ready',estimatedMinutes:'About {min}–{max} min',remindBefore:'{count} stop(s) early',arrivalReminder:'At station',sourceOfficial:'Taiyuan Metro official static data',sourceFallback:'Local cached data',helpToast:'Static data prototype; no live train database connected',serviceToast:'Open this prototype through the local service',themeNameDark:'Dark',themeNameLight:'Light',themeNameSystem:'System',languageSystem:'System',languageChinese:'简体中文',languageEnglish:'English',confirmReset:'Tap again to confirm reset',resetDone:'Local preferences reset',notificationUnavailable:'Browser notifications unavailable',locationNeedsApp:'Location is not used to advance trips in this version',permissionOpen:'Enabled',permissionClosed:'Disabled'
+      }
+    };
+    Object.assign(dictionaries['zh-CN'],{previewAlert:'预览提醒',previewArrival:'预览到站提醒',dismissAlert:'知道了',close:'关闭',alertTitle:'下车提醒',alertAtStation:'请准备在 {station} 下车',alertArrived:'已到达 {station}',arrivalReached:'已到达 {station}',arrivalModalMessage:'列车已到达目标站，请携带好随身物品及时下车。',stayOnTrip:'留在行程',finishTrip:'结束行程',notificationTitle:'到站啦 · 太原地铁',notificationBody:'请准备在 {station} 下车',notificationPermissionUpdated:'通知权限已更新'});
+    Object.assign(dictionaries.en,{previewAlert:'Preview alert',previewArrival:'Preview arrival alert',dismissAlert:'Dismiss',close:'Close',alertTitle:'Get ready to exit',alertAtStation:'Please prepare to exit at {station}',alertArrived:'Arrived at {station}',arrivalReached:'Arrived at {station}',arrivalModalMessage:'The train has reached your destination. Please take your belongings and exit.',stayOnTrip:'Stay on trip',finishTrip:'End trip',notificationTitle:'Arrive · Taiyuan Metro',notificationBody:'Please prepare to exit at {station}',notificationPermissionUpdated:'Notification permission updated'});
+    Object.assign(dictionaries['zh-CN'],{arrivalAlertMode:'到站提醒模式',arrivalAlertModeHint:'选择到站时的提醒方式',normalMode:'正常模式',normalModeHint:'弹窗 + 铃声',silentMode:'静音模式',silentModeHint:'仅弹窗',popupAndSound:'弹窗 + 铃声',popupOnly:'仅弹窗',normalAlertHint:'到站先弹窗，再播放铃声',silentAlertHint:'到站仅显示弹窗',notificationPausedHint:'静音模式下暂停发送',normalModeSaved:'已切换至正常模式',silentModeSaved:'已切换至静音模式'});
+    Object.assign(dictionaries.en,{arrivalAlertMode:'Arrival alert mode',arrivalAlertModeHint:'Choose how arrival alerts appear',normalMode:'Normal',normalModeHint:'Pop-up + sound',silentMode:'Silent',silentModeHint:'Pop-up only',popupAndSound:'Pop-up + sound',popupOnly:'Pop-up only',normalAlertHint:'Shows the pop-up, then plays the alert sound',silentAlertHint:'Shows the arrival pop-up without sound',notificationPausedHint:'Paused while Silent mode is on',normalModeSaved:'Normal mode enabled',silentModeSaved:'Silent mode enabled'});
+    Object.assign(dictionaries['zh-CN'],{homeConfidence:'提醒会随着途中的进度持续调整。',backendOffline:'线路服务暂不可用',serviceToast:'线路服务暂时无法连接',helpToast:'提醒会根据站序和你更新的行程进度进行估算',historyNotSaved:'暂无记录',historyEmpty:'这里暂时没有可显示的行程。',historyTip:'经过一站时及时更新进度，提醒会更准确。',historyAction:'设置下一段行程',backgroundLockHint:'保持应用在前台，可获得最稳定的提醒',locationPermissionHint:'查看系统是否允许位置访问',locationDataHint:'当前不会保存你的位置信息',localMode:'本地版',routeReady:'线路已就绪',routeCached:'离线线路可用',estimateMode:'根据当前进度估算',estimateConfidence:'提醒会随行程进度调整'});
+    Object.assign(dictionaries.en,{homeConfidence:'Alert timing keeps adjusting as your trip progresses.',backendOffline:'Route service unavailable',serviceToast:'The route service is temporarily unavailable',helpToast:'Alerts are estimated from station order and the progress you update',historyNotSaved:'No trips yet',historyEmpty:'There are no trips to show here yet.',historyTip:'Update your progress after each stop to keep alerts accurate.',historyAction:'Plan the next trip',backgroundLockHint:'Keep the app open for the most reliable alert',locationPermissionHint:'See whether the system allows location access',locationDataHint:'Your location is not saved in this version',localMode:'Local',routeReady:'Route ready',routeCached:'Offline route ready',estimateMode:'Estimated from current progress',estimateConfidence:'Alerts adjust as your trip progresses'});
+    Object.assign(dictionaries['zh-CN'],{simulationMode:'模拟自动推进',simulationHint:'仅用于前台演示，不代表实时列车位置',simulationSpeed:'推进速度',simulationSlow:'慢 · 8 秒',simulationStandard:'标准 · 4 秒',simulationFast:'快 · 2 秒',simulationPaused:'已暂停 · 演示不代表实时位置',simulationRunning:'自动推进中 · 每 {seconds} 秒一站',simulationPausedHidden:'进入后台后已暂停，返回后需手动继续',simulationStoppedError:'请求失败，模拟已暂停',simulationArrived:'已到终点，模拟已停止',simulationStartedToast:'模拟自动推进已开始',simulationPausedToast:'模拟自动推进已暂停',simulationSpeedSaved:'推进速度已更新',progressSynced:'行程进度已同步',tripRestored:'已恢复上次行程，请核对当前站',tripExpired:'上次行程已失效，请重新设置',tripEndSyncFailed:'已在本机结束；后端暂未同步，将在 24 小时内自动失效',staticManualProgress:'静态时刻 + 手动校正',staticSimulationProgress:'静态时刻 + 模拟推进',manualConfidenceReason:'未接入实时列车位置；依据官网时刻、站序及手动报站估算',simulationConfidenceReason:'演示按固定间隔推进，未接入实时列车位置'});
+    Object.assign(dictionaries.en,{simulationMode:'Simulated auto advance',simulationHint:'Foreground demo only; not live train position',simulationSpeed:'Speed',simulationSlow:'Slow · 8 sec',simulationStandard:'Standard · 4 sec',simulationFast:'Fast · 2 sec',simulationPaused:'Paused · this demo is not live tracking',simulationRunning:'Auto advancing · one stop every {seconds} sec',simulationPausedHidden:'Paused in the background; resume manually',simulationStoppedError:'Request failed; simulation paused',simulationArrived:'Destination reached; simulation stopped',simulationStartedToast:'Simulated auto advance started',simulationPausedToast:'Simulated auto advance paused',simulationSpeedSaved:'Advance speed updated',progressSynced:'Trip progress synchronized',tripRestored:'Previous trip restored; please confirm your current station',tripExpired:'Previous trip expired; plan a new trip',tripEndSyncFailed:'Ended on this device; backend sync failed and will expire within 24 hours',staticManualProgress:'Static schedule + manual progress',staticSimulationProgress:'Static schedule + simulated progress',manualConfidenceReason:'No live train positions; estimated from the official schedule and manual progress',simulationConfidenceReason:'Fixed-interval demo; no live train positions are connected'});
+    const SIMULATION_DELAYS=[2000,4000,8000];
+    const defaultPreferences={theme:'system',language:'system',defaultReminder:1,alertMode:'normal',vibration:true,simulationDelay:4000};
+    let preferences=loadPreferences(),lines=[],activeLine=null,orderedStations=[],reminder=preferences.defaultReminder,currentTrip=null,healthState=null,resetArmed=false,alertKey='',audioContext=null,arrivalTrip=null,arrivalSoundTimer=null,arrivalReturnFocus=null,simulationRunning=false,simulationTimer=null,simulationStatusKey='simulationPaused',advanceInFlight=false,tripGeneration=0;
+    const systemTheme=matchMedia('(prefers-color-scheme: dark)');
+    const $=id=>document.getElementById(id); const lineSelect=$('lineSelect'),dirSelect=$('directionSelect'),fromSelect=$('fromSelect'),toSelect=$('toSelect');
+    const pickerConfigs={
+      lineSelect:{label:'line',tone:'origin'},
+      directionSelect:{label:'direction',tone:'origin'},
+      fromSelect:{label:'boardingStation',tone:'origin',numbered:true},
+      toSelect:{label:'destination',tone:'destination',numbered:true},
+      languageSelect:{label:'language',tone:'origin'},
+      defaultReminderSelect:{label:'defaultTiming',tone:'destination'},
+      simulationSpeedSelect:{label:'simulationSpeed',tone:'origin'}
+    };
+    let activePickerSelect=null,pickerReturnFocus=null,pickerScrollTop=0;
+
+    function loadPreferences(){try{const saved=JSON.parse(localStorage.getItem('daozhanla.preferences')||'{}');const alertMode=['normal','silent'].includes(saved.alertMode)?saved.alertMode:(saved.sound===false?'silent':'normal');const simulationDelay=SIMULATION_DELAYS.includes(saved.simulationDelay)?saved.simulationDelay:defaultPreferences.simulationDelay;const{sound,earlyLowConfidence,...rest}=saved;return{...defaultPreferences,...rest,alertMode,simulationDelay};}catch{return{...defaultPreferences}}}
+    function savePreferences(){try{localStorage.setItem('daozhanla.preferences',JSON.stringify(preferences));}catch{}}
+    function currentLanguage(){if(preferences.language!=='system')return preferences.language;return navigator.language.toLowerCase().startsWith('zh')?'zh-CN':'en';}
+    function t(key,variables={}){let text=(dictionaries[currentLanguage()]||dictionaries['zh-CN'])[key]||dictionaries['zh-CN'][key]||key;for(const [name,value] of Object.entries(variables))text=text.replace(`{${name}}`,value);return text;}
+    function replaceSelectOptions(select,items,selectedValue){const options=items.map(item=>{const option=document.createElement('option');option.value=String(item.value);option.textContent=String(item.label);return option;});select.replaceChildren(...options);if(selectedValue!==undefined)select.value=String(selectedValue);}
+    function setupMobileSelects(){
+      const entries=Object.entries(pickerConfigs).map(([id,config])=>({select:$(id),config}));
+      if(entries.some(({select})=>!select))return;
+      entries.forEach(({select})=>{
+        select.classList.add('native-select-source');
+        select.setAttribute('aria-hidden','true');
+        select.tabIndex=-1;
+        let trigger=$(`${select.id}Trigger`);
+        if(!trigger){
+          trigger=document.createElement('button');
+          trigger.id=`${select.id}Trigger`;
+          trigger.type='button';
+          trigger.className='select-trigger';
+          trigger.dataset.selectFor=select.id;
+          trigger.setAttribute('aria-haspopup','dialog');
+          trigger.setAttribute('aria-controls','pickerLayer');
+          trigger.setAttribute('aria-expanded','false');
+          const value=document.createElement('span');
+          value.className='select-trigger-value';
+          const icon=document.createElement('span');
+          icon.className='ui-icon icon-arrow select-trigger-icon';
+          icon.setAttribute('aria-hidden','true');
+          trigger.append(value,icon);
+          trigger.onclick=()=>openMobilePicker(select);
+          trigger.onkeydown=event=>{
+            if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return;
+            event.preventDefault();
+            openMobilePicker(select);
+          };
+          select.insertAdjacentElement('afterend',trigger);
+        }
+        trigger.classList.toggle('compact-picker-trigger',select.classList.contains('compact-select'));
+      });
+      document.querySelector('.phone').classList.add('picker-enhanced');
+      $('pickerScrim').onclick=event=>{event.preventDefault();closeMobilePicker();};
+      $('pickerClose').onclick=()=>closeMobilePicker();
+      $('pickerLayer').onkeydown=handleMobilePickerKeys;
+      syncSelectTriggers();
+    }
+    function syncSelectTrigger(select){
+      const trigger=$(`${select.id}Trigger`);
+      if(!trigger)return;
+      const config=pickerConfigs[select.id];
+      const text=select.selectedOptions[0]?.textContent?.trim()||select.options[0]?.textContent?.trim()||t('loading');
+      trigger.querySelector('.select-trigger-value').textContent=text;
+      trigger.disabled=select.disabled||!select.options.length;
+      trigger.setAttribute('aria-expanded',String(activePickerSelect===select&&!$('pickerLayer').hidden));
+      trigger.setAttribute('aria-label',`${t(config.label)}: ${text}`);
+      trigger.title=text;
+    }
+    function syncSelectTriggers(){Object.keys(pickerConfigs).forEach(id=>{const select=$(id);if(select)syncSelectTrigger(select);});}
+    function buildMobilePickerOptions(select,config){
+      const fragment=document.createDocumentFragment();
+      let focusTarget=null;
+      Array.from(select.options).filter(option=>!option.hidden).forEach((option,index)=>{
+        const control=document.createElement('button');
+        control.type='button';
+        control.className=`picker-option${config.numbered?'':' plain'}`;
+        control.id=`pickerOption${index}`;
+        control.dataset.value=option.value;
+        control.setAttribute('role','option');
+        control.setAttribute('aria-selected',String(option.selected));
+        control.disabled=option.disabled;
+        control.tabIndex=option.selected&&!option.disabled?0:-1;
+        const marker=document.createElement('span');
+        marker.className='picker-option-marker';
+        marker.setAttribute('aria-hidden','true');
+        const label=document.createElement('span');
+        label.className='picker-option-label';
+        label.textContent=option.textContent.trim();
+        const number=document.createElement('span');
+        number.className='picker-option-index';
+        number.textContent=config.numbered?String(index+1).padStart(2,'0'):'';
+        number.setAttribute('aria-hidden','true');
+        control.append(marker,label,number);
+        control.onfocus=()=>{
+          $('pickerOptions').querySelectorAll('.picker-option').forEach(item=>item.tabIndex=item===control?0:-1);
+        };
+        control.onclick=()=>commitMobilePicker(option.value);
+        fragment.append(control);
+        if(option.selected&&!option.disabled)focusTarget=control;
+        else if(!focusTarget&&!option.disabled)focusTarget=control;
+      });
+      $('pickerOptions').replaceChildren(fragment);
+      return focusTarget;
+    }
+    function openMobilePicker(select){
+      if(!select||select.disabled||!select.options.length||!$('arrivalModalLayer').hidden)return;
+      if(activePickerSelect===select&&!$('pickerLayer').hidden)return;
+      if(activePickerSelect)closeMobilePicker({restoreFocus:false});
+      const config=pickerConfigs[select.id];
+      if(!config)return;
+      activePickerSelect=select;
+      pickerReturnFocus=$(`${select.id}Trigger`)||document.activeElement;
+      pickerScrollTop=document.querySelector('.content').scrollTop;
+      $('pickerTitle').textContent=t(config.label);
+      $('pickerClose').setAttribute('aria-label',t('close'));
+      $('pickerLayer').dataset.tone=config.tone;
+      $('pickerLayer').dataset.compact=String(!config.numbered);
+      const focusTarget=buildMobilePickerOptions(select,config);
+      $('pickerLayer').hidden=false;
+      document.querySelector('.phone').classList.add('picker-open');
+      setAppInert(true,'pickerLayer');
+      syncSelectTriggers();
+      requestAnimationFrame(()=>{
+        if(activePickerSelect!==select||$('pickerLayer').hidden)return;
+        const target=focusTarget||$('pickerClose');
+        target.focus();
+        target.scrollIntoView?.({block:'nearest'});
+      });
+    }
+    function closeMobilePicker({restoreFocus=true}={}){
+      const layer=$('pickerLayer');
+      if(layer.hidden&&!activePickerSelect)return;
+      const returnFocus=pickerReturnFocus;
+      layer.hidden=true;
+      document.querySelector('.phone').classList.remove('picker-open');
+      activePickerSelect=null;
+      pickerReturnFocus=null;
+      setAppInert(false);
+      document.querySelector('.content').scrollTop=pickerScrollTop;
+      syncSelectTriggers();
+      if(restoreFocus&&returnFocus?.isConnected&&!returnFocus.disabled)returnFocus.focus();
+    }
+    function commitMobilePicker(value){
+      const select=activePickerSelect;
+      const returnFocus=pickerReturnFocus;
+      closeMobilePicker({restoreFocus:false});
+      if(!select)return;
+      const option=Array.from(select.options).find(item=>item.value===value&&!item.disabled);
+      if(option&&select.value!==value){
+        select.value=value;
+        select.dispatchEvent(new Event('input',{bubbles:true}));
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+      syncSelectTriggers();
+      if(returnFocus?.isConnected&&!returnFocus.disabled)returnFocus.focus();
+    }
+    function handleMobilePickerKeys(event){
+      if(event.key==='Escape'){event.preventDefault();closeMobilePicker();return;}
+      const options=Array.from($('pickerOptions').querySelectorAll('.picker-option:not(:disabled)'));
+      if(['ArrowDown','ArrowRight','ArrowUp','ArrowLeft','Home','End'].includes(event.key)){
+        if(!options.length)return;
+        event.preventDefault();
+        const current=options.indexOf(document.activeElement);
+        let next=current;
+        if(event.key==='Home')next=0;
+        else if(event.key==='End')next=options.length-1;
+        else if(['ArrowDown','ArrowRight'].includes(event.key))next=current<0?0:(current+1)%options.length;
+        else next=current<0?options.length-1:(current-1+options.length)%options.length;
+        options.forEach((option,index)=>option.tabIndex=index===next?0:-1);
+        options[next].focus();
+        options[next].scrollIntoView({block:'nearest'});
+        return;
+      }
+      if(event.key!=='Tab')return;
+      const currentOption=options.find(option=>option.tabIndex===0)||options[0];
+      const controls=[$('pickerClose'),currentOption].filter(control=>control&&!control.disabled);
+      if(!controls.length)return;
+      const current=controls.indexOf(document.activeElement);
+      if(event.shiftKey&&current<=0){event.preventDefault();controls.at(-1).focus();}
+      else if(!event.shiftKey&&(current<0||current===controls.length-1)){event.preventDefault();controls[0].focus();}
+    }
+    function applyLanguage(){
+      document.documentElement.lang=currentLanguage();
+      document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n)});
+      replaceSelectOptions($('languageSelect'),[{value:'system',label:t('languageSystem')},{value:'zh-CN',label:t('languageChinese')},{value:'en',label:t('languageEnglish')}],preferences.language);
+      replaceSelectOptions($('defaultReminderSelect'),[{value:2,label:t('remindBefore',{count:2})},{value:1,label:t('remindBefore',{count:1})},{value:0,label:t('arrivalReminder')}],preferences.defaultReminder);
+      replaceSelectOptions($('simulationSpeedSelect'),[{value:8000,label:t('simulationSlow')},{value:4000,label:t('simulationStandard')},{value:2000,label:t('simulationFast')}],preferences.simulationDelay);
+      $('languageSelect').setAttribute('aria-label',t('language'));
+      $('defaultReminderSelect').setAttribute('aria-label',t('defaultTiming'));
+      $('simulationSpeedSelect').setAttribute('aria-label',t('simulationSpeed'));
+      $('pickerClose').setAttribute('aria-label',t('close'));
+      document.querySelector('.theme-picker').setAttribute('aria-label',t('theme'));
+      updateReminderChips();updateThemeControls();updateSwitches();updateSimulationControls();
+      if(healthState)updateDataSourceLabels();
+      if(currentTrip)renderTrip(currentTrip);
+      if(arrivalTrip&&!$('arrivalModalLayer').hidden)updateArrivalModal(arrivalTrip);
+      syncSelectTriggers();
+    }
+    function applyTheme(){const dark=preferences.theme==='dark'||(preferences.theme==='system'&&systemTheme.matches);document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.dataset.themeChoice=preferences.theme;$('themeColorMeta').content=dark?'#0c111b':'#f7f9fc';updateThemeControls();}
+    function updateThemeControls(){const names={dark:t('themeNameDark'),light:t('themeNameLight'),system:t('themeNameSystem')};$('themeSummary').textContent=names[preferences.theme];document.querySelectorAll('.theme-option').forEach(option=>{const selected=option.dataset.themeValue===preferences.theme;option.classList.toggle('selected',selected);option.setAttribute('aria-checked',String(selected));});}
+    function isSilentMode(){return preferences.alertMode==='silent';}
+    function updateAlertModeControls(){
+      const silent=isSilentMode();
+      $('alertModePicker').setAttribute('aria-label',t('arrivalAlertMode'));
+      document.querySelectorAll('[data-alert-mode]').forEach(control=>{const selected=control.dataset.alertMode===preferences.alertMode;control.classList.toggle('selected',selected);control.setAttribute('aria-checked',String(selected));control.tabIndex=selected?0:-1;});
+      $('vibrationSetting').disabled=silent;$('vibrationSettingRow').classList.toggle('mode-overridden',silent);
+      $('notificationPermissionHint').textContent=t(silent?'notificationPausedHint':'notificationPermissionHint');
+      updateTripAlertSummary();
+    }
+    function updateSwitches(){document.querySelectorAll('[data-pref]').forEach(control=>{const enabled=Boolean(preferences[control.dataset.pref]);control.classList.toggle('on',enabled);control.setAttribute('aria-pressed',String(enabled));control.setAttribute('aria-label',`${control.closest('.settings-row').querySelector('b').textContent}: ${enabled?t('enabled'):t('disabled')}`)});updateAlertModeControls();}
+    function updateTripAlertSummary(){const silent=isSilentMode();$('tripAlertModeLabel').textContent=t(silent?'popupOnly':'popupAndSound');$('tripAlertModeHint').textContent=t(silent?'silentAlertHint':'normalAlertHint');$('tripAlertStatus').textContent=t(silent?'silentMode':'normalMode');$('tripAlertStatus').classList.toggle('ok',!silent);}
+    function updateReminderChips(){document.querySelectorAll('#reminderChips .chip').forEach(chip=>{const value=Number(chip.dataset.value);chip.textContent=value?t('remindBefore',{count:value}):t('arrivalReminder');chip.classList.toggle('selected',value===reminder)});}
+    function clearSimulationTimer(){if(simulationTimer!==null){clearTimeout(simulationTimer);simulationTimer=null;}}
+    function updateSimulationControls(){
+      const active=currentTrip?.status==='active';
+      if(!active&&simulationRunning){simulationRunning=false;clearSimulationTimer();}
+      const toggle=$('simulationToggle');
+      toggle.classList.toggle('on',simulationRunning);
+      toggle.setAttribute('aria-pressed',String(simulationRunning));
+      toggle.setAttribute('aria-label',`${t('simulationMode')}: ${simulationRunning?t('enabled'):t('disabled')}`);
+      toggle.disabled=!active||(advanceInFlight&&!simulationRunning);
+      $('simulationSpeedSelect').disabled=!active;
+      const statusKey=currentTrip?.status==='arrived'?'simulationArrived':simulationRunning?'simulationRunning':simulationStatusKey;
+      $('simulationStatus').textContent=statusKey==='simulationRunning'?t(statusKey,{seconds:preferences.simulationDelay/1000}):t(statusKey);
+      if(currentTrip&&!currentTrip.isRealtime)$('arrivalText').textContent=t(simulationRunning?'staticSimulationProgress':'staticManualProgress');
+      if(currentTrip){const copy=$('confidenceBox').querySelector('span');if(copy){const label=copy.querySelector('b');if(label)copy.replaceChildren(label,document.createTextNode(` · ${t(simulationRunning?'simulationConfidenceReason':'manualConfidenceReason')}`));}}
+      syncSelectTrigger($('simulationSpeedSelect'));
+    }
+    function pauseSimulation({statusKey='simulationPaused',notify=false}={}){
+      clearSimulationTimer();simulationRunning=false;simulationStatusKey=statusKey;updateSimulationControls();
+      if(notify)toast(t('simulationPausedToast'));
+    }
+    function scheduleSimulationTick(){
+      clearSimulationTimer();
+      if(!simulationRunning||advanceInFlight||currentTrip?.status!=='active')return;
+      if(document.hidden){pauseSimulation({statusKey:'simulationPausedHidden'});return;}
+      const generation=tripGeneration,tripId=currentTrip.id;
+      simulationTimer=setTimeout(()=>{
+        simulationTimer=null;
+        if(document.hidden){pauseSimulation({statusKey:'simulationPausedHidden'});return;}
+        if(simulationRunning&&!advanceInFlight&&generation===tripGeneration&&currentTrip?.id===tripId)void advanceCurrentTrip('simulation');
+      },preferences.simulationDelay);
+    }
+    function toggleSimulation(){
+      if(simulationRunning){pauseSimulation({notify:true});return;}
+      if(currentTrip?.status!=='active'){toast(t('tripRequired'));return;}
+      if(!tripStore.isSimulation()){toast('模拟只在独立测试行程中运行，请结束后从首页选择模拟测试。');return;}
+      if(document.hidden||advanceInFlight)return;
+      prepareAlertAudio();simulationRunning=true;simulationStatusKey='simulationRunning';updateSimulationControls();scheduleSimulationTick();toast(t('simulationStartedToast'));
+    }
+    function setSimulationSpeed(){
+      const delay=Number($('simulationSpeedSelect').value);
+      if(!SIMULATION_DELAYS.includes(delay))return;
+      preferences.simulationDelay=delay;savePreferences();updateSimulationControls();if(simulationRunning)scheduleSimulationTick();toast(t('simulationSpeedSaved'));
+    }
+    function updateDataSourceLabels(){$('dataStatus').textContent='本地 23 站 · 无需后端';$('settingsDataSource').textContent='内置太原地铁官网静态站序与计划时间';}
+    function show(name){closeMobilePicker({restoreFocus:false});document.querySelector('.phone').dataset.screen=name;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===name));document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.screen===name));document.querySelector('.content').scrollTop=0;}
+    function toast(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').classList.remove('show'),1800)}
+    function alertStation(trip){return trip?.route?.at(-1)?.name||'';}
+    function alertCopy(trip){const station=alertStation(trip);return{title:t('alertTitle'),message:trip.status==='arrived'?t('alertArrived',{station}):t('alertAtStation',{station})};}
+    function updateAlertBanner(trip){const copy=alertCopy(trip);$('tripAlertTitle').textContent=copy.title;$('tripAlertMessage').textContent=copy.message;$('dismissAlertBtn').setAttribute('aria-label',t('dismissAlert'));$('tripAlertBanner').hidden=false;}
+    function hideTripAlert(){$('tripAlertBanner').hidden=true;}
+    function updateArrivalModal(trip){
+      $('arrivalModalTitle').textContent=trip.alertTitle||t('arrivalReached',{station:alertStation(trip)});
+      $('arrivalModalMessage').textContent=trip.alertMessage||t('arrivalModalMessage');
+      $('arrivalModalMeta').textContent=`${trip.lineName} · ${trip.direction.name} · 仅前台提醒`;
+    }
+    function setAppInert(inert,activeLayerId='arrivalModalLayer'){document.querySelectorAll('.phone > *').forEach(element=>{element.inert=inert&&element.id!==activeLayerId;});}
+    function closeArrivalModal({restoreFocus=true}={}){
+      clearTimeout(arrivalSoundTimer);arrivalSoundTimer=null;
+      $('arrivalModalLayer').hidden=true;arrivalTrip=null;
+      const pickerOpen=Boolean(activePickerSelect&&!$('pickerLayer').hidden);
+      setAppInert(pickerOpen,pickerOpen?'pickerLayer':'arrivalModalLayer');
+      if(restoreFocus&&!pickerOpen){const target=arrivalReturnFocus?.isConnected&&!arrivalReturnFocus.disabled?arrivalReturnFocus:$('endBtn');target?.focus();}
+      arrivalReturnFocus=null;
+      stopAlertEffects();
+      if(currentTrip&&!document.hidden&&!foregroundPaused)queueMicrotask(()=>{showTripAlert(currentTrip);locationController.retryAlert();});
+    }
+    function openArrivalModal(trip){
+      closeMobilePicker();
+      if(simulationRunning)pauseSimulation({statusKey:currentTrip?.status==='arrived'?'simulationArrived':'simulationPaused'});
+      clearTimeout(toast.timer);$('toast').classList.remove('show');clearTimeout(arrivalSoundTimer);hideTripAlert();arrivalTrip=trip;arrivalReturnFocus=document.activeElement;
+      updateArrivalModal(trip);setAppInert(true,'arrivalModalLayer');$('arrivalModalLayer').hidden=false;
+      requestAnimationFrame(()=>{
+        if(document.hidden||arrivalTrip!==trip||$('arrivalModalLayer').hidden)return;
+        trip.presented=true;
+        $('arrivalDismissBtn').focus();
+        if(trip.reminderKey){try{tripStore.markReminder(trip.reminderKey);}catch(error){$('storageStatus').textContent=error.message;}}
+        arrivalSoundTimer=setTimeout(()=>{if(!document.hidden&&arrivalTrip===trip){playAlertSound();vibrateAlert();}arrivalSoundTimer=null;},400);
+      });
+    }
+    function prepareAlertAudio(){
+      if(isSilentMode())return;
+      const AudioCtor=window.AudioContext||window.webkitAudioContext;
+      if(!AudioCtor){setEffectStatus('sound','此浏览器不支持提示音，保留弹窗');return;}
+      try{
+        audioContext=audioContext&&audioContext.state!=='closed'?audioContext:new AudioCtor();
+        if(audioContext.state==='suspended')audioContext.resume().catch(()=>setEffectStatus('sound','声音未解锁，请点击测试提醒'));
+      }catch{setEffectStatus('sound','声音初始化失败，保留弹窗');}
+    }
+    function playAlertSound(){
+      if(isSilentMode())return;
+      prepareAlertAudio();
+      if(!audioContext)return;
+      try{
+        const context=audioContext;
+        const token=effectsGeneration;
+        const schedule=()=>{
+          if(token!==effectsGeneration||document.hidden||isSilentMode())return;
+          if(context.state!=='running'){setEffectStatus('sound','声音受限，请点击测试提醒');return;}
+          const startAt=context.currentTime;
+          [660,880,1040].forEach((frequency,index)=>{
+            const offset=index*.22;
+            const oscillator=context.createOscillator();
+            const gain=context.createGain();
+            oscillator.type='sine';
+            oscillator.frequency.setValueAtTime(frequency,startAt+offset);
+            gain.gain.setValueAtTime(.0001,startAt+offset);
+            gain.gain.exponentialRampToValueAtTime(.12,startAt+offset+.025);
+            gain.gain.exponentialRampToValueAtTime(.0001,startAt+offset+.18);
+            oscillator.connect(gain);gain.connect(context.destination);
+            oscillator.start(startAt+offset);oscillator.stop(startAt+offset+.2);
+            activeOscillators.add(oscillator);oscillator.onended=()=>activeOscillators.delete(oscillator);
+          });
+          setEffectStatus('sound','已请求播放，请确认实际听到声音');
+        };
+        if(context.state==='suspended')context.resume().then(schedule).catch(()=>setEffectStatus('sound','播放失败，保留弹窗'));else schedule();
+      }catch{setEffectStatus('sound','播放失败，保留弹窗');}
+    }
+    function vibrateAlert(){if(isSilentMode()||!preferences.vibration)return;if(typeof navigator.vibrate!=='function'){setEffectStatus('vibration','此设备不支持网页震动（iPhone 通常如此），保留弹窗');return;}try{setEffectStatus('vibration',navigator.vibrate([180,80,260])?'已请求震动，请确认实际感受到':'震动不可用，保留弹窗');}catch{setEffectStatus('vibration','震动失败，保留弹窗');}}
+    function sendBrowserNotification(trip){
+      if(isSilentMode()||!('Notification'in window)||Notification.permission!=='granted')return;
+      try{
+        const notification=new Notification(t('notificationTitle'),{body:alertCopy(trip).message,tag:`daozhanla-${trip.id}`});
+        notification.onclick=()=>{window.focus();notification.close?.();};
+      }catch{}
+    }
+    function showTripAlert(trip,{force=false}={}){
+      if(!trip||document.hidden||!$('arrivalModalLayer').hidden)return;
+      const decision=force?{title:'测试提醒 · 不改变行程',message:'请确认看到弹窗、听到声音；iPhone 不支持网页震动时会正常降级。'}:tripStore.reminder();
+      if(!decision)return;
+      openArrivalModal({...trip,alertTitle:decision.title,alertMessage:decision.message,reminderKey:force?null:decision.key});
+    }
+    function setStartButtonText(key){const button=$('startBtn');const label=button?.querySelector('[data-i18n]');if(label){label.dataset.i18n=key;label.textContent=t(key);}else if(button)button.textContent=t(key);}
+    function enableForm(enabled){[lineSelect,dirSelect,fromSelect,toSelect,$('startBtn')].forEach(el=>el.disabled=!enabled);setStartButtonText(enabled?'startTrip':'backendOffline');syncSelectTriggers();}
+    function setLine(){activeLine=lines.find(line=>line.id===lineSelect.value);if(!activeLine)return;replaceSelectOptions(dirSelect,activeLine.directions.map(direction=>({value:direction.id,label:direction.name})));setDirection();}
+    function setDirection(){const direction=activeLine?.directions.find(item=>item.id===dirSelect.value);if(!direction)return;const byId=new Map(activeLine.stations.map(station=>[station.id,station]));const ids=direction.orderedStationIds||(direction.reverse?[...byId.keys()].reverse():[...byId.keys()]);orderedStations=ids.map(id=>byId.get(id)).filter(Boolean);replaceSelectOptions(fromSelect,orderedStations.slice(0,-1).map(station=>({value:station.id,label:station.name})),orderedStations[Math.min(7,orderedStations.length-2)]?.id||'');setTargets();}
+    function animateHeroStation(element,value){if(!value||element.textContent===value)return false;element.textContent=value;element.classList.remove('route-updated');void element.offsetWidth;element.classList.add('route-updated');return true;}
+    function updateHeroRoute(){const from=fromSelect?.selectedOptions?.[0]?.textContent?.trim();const to=toSelect?.selectedOptions?.[0]?.textContent?.trim();const changedFrom=animateHeroStation($('heroFrom'),from);const changedTo=animateHeroStation($('heroTo'),to);if(changedFrom||changedTo){const motion=$('metroMotion');motion.classList.remove('route-adjusted');void motion.offsetWidth;motion.classList.add('route-adjusted');}syncSelectTriggers();}
+    function setTargets(){const fromIndex=orderedStations.findIndex(station=>station.id===fromSelect.value);const possible=orderedStations.slice(Math.max(0,fromIndex+1));replaceSelectOptions(toSelect,possible.map(station=>({value:station.id,label:station.name})),possible[Math.min(5,possible.length-1)]?.id||'');updateHeroRoute();}
+    async function restoreActiveTrip(){
+      const result=tripStore.restore();
+      if(result.status==='saved'){renderTrip(result.trip);show('trip');showTripAlert(result.trip);toast(t('tripRestored'));}
+      else if(result.status==='invalid')$('storageStatus').textContent=result.message;
+    }
+    async function loadData(){try{lines=DaozhanCore.offlineTrips.getLines();healthState={local:true};replaceSelectOptions(lineSelect,lines.map(line=>({value:line.id,label:`${line.name} · ${line.stations.length} 站`})),'2');updateDataSourceLabels();enableForm(true);setLine();await restoreActiveTrip();}catch(error){enableForm(false);$('storageStatus').textContent=`本地线路加载失败，请重新在线加载：${error.message}`;}}
+    function renderTrip(trip){
+      currentTrip=trip;
+      const last=trip.route.at(-1),arrived=trip.status==='arrived';
+      const progress=trip.route.length===1?100:Math.round(trip.currentIndex/(trip.route.length-1)*100);
+      $('tripLine').textContent=`${trip.lineName} · ${trip.direction.name}`;
+      $('tripTarget').textContent=`${arrived?t('arrivedTitle'):t('prepareTitle')}｜${last.name}`;
+      $('stopsLeft').textContent=trip.stopsRemaining;
+      $('etaText').textContent=arrived?'请核对站牌':`剩余计划 ${trip.scheduledMinutesRemaining} 分钟`;
+      $('arrivalText').textContent=trip.isRealtime?'实时到站数据':t(simulationRunning?'staticSimulationProgress':'staticManualProgress');
+      $('nextLabel').textContent=last.name;$('currentLabel').textContent=trip.currentStation.name;
+      $('reminderSummary').textContent=trip.remindBefore?t('remindBefore',{count:trip.remindBefore}):t('arrivalReminder');
+      $('progressBar').style.setProperty('--trip-progress',`${progress}%`);$('tripMotion').style.setProperty('--trip-progress',`${progress}%`);
+      const stops=trip.route.map((station,index)=>{const stop=document.createElement('div');stop.className=`stop ${index<trip.currentIndex?'done':index===trip.currentIndex?'current':''}`.trim();const name=document.createElement('span');name.textContent=station.name;stop.append(name);if(index===trip.route.length-1){const bell=document.createElement('span');bell.className='bell';bell.setAttribute('aria-label',t('destination'));const icon=document.createElement('span');icon.className='ui-icon icon-bell';icon.setAttribute('aria-hidden','true');bell.append(icon);stop.append(bell);}return stop;});
+      $('timeline').replaceChildren(...stops);
+      const confidenceReason=t(simulationRunning?'simulationConfidenceReason':'manualConfidenceReason');
+      const dot=document.createElement('i');dot.className='dot';
+      const copy=document.createElement('span'),label=document.createElement('b');label.textContent=trip.shouldRemind?t('reminderRange'):t('mediumConfidence');copy.append(label,document.createTextNode(` · ${confidenceReason}`));
+      $('confidenceBox').className='confidence warn';$('confidenceBox').replaceChildren(dot,copy);
+      $('adjustLabel').textContent=arrived?t('arrivedTitle'):t('passedStation');$('adjustIcon').className=`ui-icon ${arrived?'icon-check':'icon-advance'}`;$('adjustBtn').disabled=arrived||advanceInFlight;$('adjustBtn').classList.toggle('done',arrived);
+      $('previewAlertBtn').querySelector('[data-i18n]').textContent=t('previewArrival');$('updateTime').textContent=t('justUpdated');
+      updateTripAlertSummary();updateSimulationControls();if(!$('tripAlertBanner').hidden)updateAlertBanner(trip);
+      updatePwaTripUI();
+    }
+    async function advanceCurrentTrip(source='manual'){
+      const trip=currentTrip;
+      if(!trip||trip.status!=='active'||advanceInFlight)return;
+      prepareAlertAudio();clearSimulationTimer();
+      const generation=tripGeneration,tripId=trip.id,expectedCurrentIndex=trip.currentIndex;
+      advanceInFlight=true;$('adjustBtn').disabled=true;updateSimulationControls();
+      try{
+        const next=tripStore.advance(expectedCurrentIndex,{source});
+        if(generation!==tripGeneration||currentTrip?.id!==tripId)return;
+        renderTrip(next);
+        if(next.status==='arrived'){pauseSimulation({statusKey:'simulationArrived'});locationController.stop();releaseWakeLock();}
+        if(next.shouldRemind)showTripAlert(next);else if(source==='manual')toast(t('advanced'));
+      }catch(error){
+        if(generation!==tripGeneration||currentTrip?.id!==tripId)return;
+        if(error.code==='TRIP_VERSION_CONFLICT'){
+          try{
+            const latest=tripStore.current();
+            if(generation!==tripGeneration||currentTrip?.id!==tripId)return;
+            renderTrip(latest);
+            if(latest.status==='arrived')pauseSimulation({statusKey:'simulationArrived'});
+            if(latest.shouldRemind)showTripAlert(latest);
+            toast(t('progressSynced'));
+          }catch(syncError){
+            if(generation===tripGeneration&&currentTrip?.id===tripId){pauseSimulation({statusKey:'simulationStoppedError'});toast(syncError.message);}
+          }
+        }else if(error.code==='TRIP_NOT_FOUND'){
+          advanceInFlight=false;tripGeneration++;currentTrip=null;pauseSimulation({statusKey:'simulationStoppedError'});alertKey='';hideTripAlert();show('home');toast(error.message);
+        }else{
+          const shouldStop=source==='simulation'||simulationRunning;
+          if(shouldStop)pauseSimulation({statusKey:'simulationStoppedError'});
+          toast(shouldStop?t('simulationStoppedError'):error.message);
+        }
+      }finally{
+        if(generation===tripGeneration&&currentTrip?.id===tripId){advanceInFlight=false;$('adjustBtn').disabled=currentTrip.status==='arrived';updateSimulationControls();if(simulationRunning)scheduleSimulationTick();}
+      }
+    }
+    function setTheme(choice){preferences.theme=choice;savePreferences();applyTheme();toast(t('themeChanged'));}
+    function setAlertMode(mode){if(!['normal','silent'].includes(mode))return;preferences.alertMode=mode;savePreferences();updateAlertModeControls();if(mode==='normal')prepareAlertAudio();else{stopAlertEffects();$('effectStatus').textContent='静音模式：仅弹窗，不请求声音或震动';}toast(t(mode==='silent'?'silentModeSaved':'normalModeSaved'));}
+    function handleAlertModeKeys(event){if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();const mode=['ArrowLeft','ArrowUp'].includes(event.key)?'normal':'silent';setAlertMode(mode);document.querySelector(`[data-alert-mode="${mode}"]`).focus();}
+    function setPermissionStatus(element,key,state){element.className=`status-pill ${state==='granted'?'ok':state==='denied'?'warn':''}`;element.textContent=t(key);}
+    async function checkNotificationPermission({request=false}={}){const status=$('notificationStatus');if(!('Notification'in window)){setPermissionStatus(status,'permissionUnsupported','denied');if(request)toast(t('notificationUnavailable'));return;}let permission=Notification.permission;if(request&&permission==='default'){try{permission=await Notification.requestPermission();}catch{}}setPermissionStatus(status,permission==='granted'?'permissionGranted':permission==='denied'?'permissionDenied':'permissionPrompt',permission);if(request)toast(permission==='granted'?t('notificationPermissionUpdated'):t('notificationUnavailable'));}
+    async function checkLocationPermission(){const status=$('locationStatus');if(!navigator.permissions?.query){setPermissionStatus(status,'permissionUnsupported','denied');return;}try{const result=await navigator.permissions.query({name:'geolocation'});setPermissionStatus(status,result.state==='granted'?'permissionGranted':result.state==='denied'?'permissionDenied':'permissionPrompt',result.state);}catch{setPermissionStatus(status,'permissionUnsupported','denied');}}
+    async function endCurrentTrip(){
+      locationWanted=false;locationController.stop();releaseWakeLock();closeArrivalModal({restoreFocus:false});tripGeneration++;
+      clearSimulationTimer();simulationRunning=false;simulationStatusKey='simulationPaused';advanceInFlight=false;currentTrip=null;alertKey='';hideTripAlert();updateSimulationControls();show('home');
+      tripStore.end();updatePwaTripUI();toast(t('tripEnded'));
+    }
+    function handleArrivalModalKeys(event){
+      if(event.key==='Escape'){event.preventDefault();closeArrivalModal();return;}
+      if(event.key!=='Tab')return;
+      const controls=[$('arrivalDismissBtn'),$('arrivalFinishBtn')];
+      const current=controls.indexOf(document.activeElement);
+      if(event.shiftKey&&current<=0){event.preventDefault();controls.at(-1).focus();}
+      else if(!event.shiftKey&&current===controls.length-1){event.preventDefault();controls[0].focus();}
+    }
+
+    systemTheme.addEventListener?.('change',()=>{if(preferences.theme==='system')applyTheme()});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&simulationRunning)pauseSimulation({statusKey:'simulationPausedHidden'});});
+    window.addEventListener('pagehide',()=>{if(simulationRunning)pauseSimulation({statusKey:'simulationPausedHidden'});});
+    document.querySelectorAll('.theme-option').forEach(option=>option.onclick=()=>setTheme(option.dataset.themeValue));
+    document.querySelectorAll('[data-alert-mode]').forEach(option=>{option.onclick=()=>setAlertMode(option.dataset.alertMode);option.onkeydown=handleAlertModeKeys;});
+    document.querySelectorAll('[data-pref]').forEach(control=>control.onclick=()=>{const key=control.dataset.pref;preferences[key]=!preferences[key];savePreferences();updateSwitches();toast(t('settingSaved'))});
+    $('languageSelect').onchange=()=>{preferences.language=$('languageSelect').value;savePreferences();applyLanguage();toast(t('languageChanged'))};
+    $('defaultReminderSelect').onchange=()=>{preferences.defaultReminder=Number($('defaultReminderSelect').value);reminder=preferences.defaultReminder;savePreferences();updateReminderChips();toast(t('settingSaved'))};
+    $('simulationToggle').onclick=toggleSimulation;
+    $('simulationSpeedSelect').onchange=setSimulationSpeed;
+    $('resetPreferences').onclick=()=>{closeMobilePicker({restoreFocus:false});if(!resetArmed){resetArmed=true;toast(t('confirmReset'));setTimeout(()=>resetArmed=false,3000);return;}preferences={...defaultPreferences};reminder=preferences.defaultReminder;savePreferences();applyTheme();applyLanguage();updateSwitches();if(simulationRunning)scheduleSimulationTick();resetArmed=false;toast(t('resetDone'))};
+    $('notificationPermission').onclick=()=>checkNotificationPermission({request:true});$('locationPermission').onclick=checkLocationPermission;
+    $('dismissAlertBtn').onclick=hideTripAlert;
+    $('previewAlertBtn').onclick=()=>{if(!currentTrip)return;prepareAlertAudio();showTripAlert({...currentTrip,status:'arrived'},{force:true});};
+    $('arrivalDismissBtn').onclick=()=>closeArrivalModal();
+    $('arrivalFinishBtn').onclick=endCurrentTrip;
+    $('arrivalModalLayer').onkeydown=handleArrivalModalKeys;
+    lineSelect.onchange=setLine;dirSelect.onchange=setDirection;fromSelect.onchange=setTargets;toSelect.onchange=updateHeroRoute;
+    document.querySelectorAll('.nav').forEach(n=>n.onclick=()=>{if(n.dataset.screen==='trip'&&!currentTrip){show('home');toast(t('tripRequired'));return;}show(n.dataset.screen)});
+    $('historyStartBtn').onclick=()=>show('home');
+    document.querySelectorAll('#reminderChips .chip').forEach(c=>c.onclick=()=>{reminder=Number(c.dataset.value);updateReminderChips();toast(reminder?t('remindBefore',{count:reminder}):t('arrivalReminder'))});
+    $('startBtn').onclick=async()=>{
+      if(currentTrip){show('trip');toast('请先结束当前行程，再创建新行程');return;}
+      prepareAlertAudio();closeArrivalModal({restoreFocus:false});
+      tripGeneration++;const generation=tripGeneration;
+      clearSimulationTimer();simulationRunning=false;simulationStatusKey='simulationPaused';advanceInFlight=false;currentTrip=null;alertKey='';updateSimulationControls();
+      locationController.stop();releaseWakeLock();locationWanted=false;
+      try{
+        $('startBtn').disabled=true;setStartButtonText('creatingTrip');
+        const trip=tripStore.create({lineId:lineSelect.value,directionId:dirSelect.value,fromStationId:fromSelect.value,toStationId:toSelect.value,remindBefore:reminder},{simulation:$('simulationEntry').checked});
+        if(generation!==tripGeneration)return;
+        alertKey='';hideTripAlert();renderTrip(trip);show('trip');if(trip.shouldRemind)showTripAlert(trip);else toast(t('tripCreated'));
+        requestWakeLock();
+        if($('enableForegroundLocation').checked&&!tripStore.isSimulation()){locationWanted=true;locationController.start(trip.id);}
+      }catch(error){if(generation===tripGeneration)toast(error.message);}finally{$('startBtn').disabled=false;setStartButtonText('startTrip');}
+    };
+    $('adjustBtn').onclick=()=>void advanceCurrentTrip('manual');
+    $('endBtn').onclick=endCurrentTrip;
+    $('helpBtn').onclick=()=>toast(t('helpToast'));
+    // pwa/app.js initializes the local entry after these existing UI helpers.
+  </script>
+  <script src="./pwa/app.js"></script>
+</body></html>
