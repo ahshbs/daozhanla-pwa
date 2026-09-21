@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "到站啦 · 太原地铁",
+  "short_name": "到站啦",
+  "description": "太原地铁 2 号线本地行程、前台定位质量观察与人工到站提醒。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f9fc",
+  "theme_color": "#244c83",
+  "icons": [
+    { "src": "assets/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
