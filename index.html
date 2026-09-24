@@ -973,6 +973,19 @@
     #storageStatus:not(:empty) { color: var(--danger); padding: 10px 14px; }
     .simulation-control[hidden] { display: none; }
     .arrival-modal { max-height: 90dvh; overflow-y: auto; }
+    .notification-layer { position: absolute; inset: 0; z-index: 30; display: flex; align-items: flex-end; padding: 18px; background: rgba(7,11,18,.68); }
+    .notification-layer[hidden] { display: none; }
+    .notification-dialog { width: 100%; max-height: calc(100dvh - 48px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 25px 22px max(22px,env(safe-area-inset-bottom)); box-shadow: 0 18px 65px var(--shadow); }
+    .notification-symbol { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 16px; color: var(--blue); background: var(--blue-soft); }
+    .notification-dialog h2 { margin: 18px 0 10px; font-size: 23px; line-height: 1.4; font-weight: 600; }
+    .notification-dialog p { font-size: 14px; line-height: 1.7; color: var(--muted); margin: 10px 0; }
+    .notification-dialog .notification-privacy { font-size: 12px; }
+    .notification-dialog button { border-radius: 14px; min-height: 48px; }
+    .notification-dialog .notification-later { width: 100%; border: 0; color: var(--muted); background: transparent; margin-top: 8px; }
+    .push-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .push-controls .adjust { flex: 1 1 130px; margin: 0; }
+    .push-status { font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .push-status[data-warning="true"] { color: var(--danger); }
   </style>
 </head>
 <body>
@@ -980,13 +993,6 @@
     <header class="header"><div class="brand"><div class="mark" data-i18n="brandMark">到</div><div><div class="eyebrow">TAIYUAN METRO</div><div class="title" data-i18n="brand">到站啦</div></div></div><button class="help" id="helpBtn" aria-label="帮助"><span class="ui-icon icon-help" aria-hidden="true"></span></button></header>
     <div class="content">
       <section class="screen active" id="home">
-        <div class="card pwa-note">
-          <h3>本地行程 / 真实前台定位观察</h3>
-          <p>太原地铁 2 号线 · 无需电脑后端。当前定位仅观察，不会自动推进；请在经过车站后人工确认。</p>
-          <label><input id="enableForegroundLocation" type="checkbox" /><span>开始时启用前台定位。我同意仅在本机即时处理位置以判断定位质量；不上传、不保存经纬度或轨迹。拒绝不影响人工行程。</span></label>
-          <label><input id="simulationEntry" type="checkbox" /><span>独立模拟测试行程（不启用真实定位，定时推进仅为演示）</span></label>
-          <p>请保持页面前台和屏幕亮起。仅支持网页前台提醒，不保证后台、锁屏或系统级闹钟必达。</p>
-        </div>
         <div class="hero home-hero">
           <div class="hero-status-row"><span class="data-chip"><i class="status-beacon"></i><small id="dataStatus" data-i18n="connecting">正在连接本地服务…</small></span><span class="line-chip"><b data-i18n="lineBadge">2号线</b></span></div>
           <div class="hero-copy"><span class="hero-kicker" data-i18n="estimatedReminder">预计提醒</span><h2 data-i18n="homeTitle">设置你的下车提醒</h2></div>
@@ -1000,20 +1006,39 @@
           <div class="reminder-inline"><div class="inline-heading"><span data-i18n="thisReminder">本次提醒</span><small data-i18n="adjustAnytime">可随时调整</small></div><div class="chips" id="reminderChips"><button class="chip selected" data-value="1"></button><button class="chip" data-value="2"></button><button class="chip" data-value="0"></button></div></div>
           <div class="confidence sheet-note"><i class="dot"></i><span data-i18n="homeConfidence">预计提醒依据站序、官网静态时刻和手动校正。</span></div>
         </div>
+        <div class="card pwa-note">
+          <h3>提醒选项</h3>
+          <label><input id="useLocalReminder" type="checkbox" checked /><span>前台预计时间提醒 · 无需 GPS、联网或通知权限。请保持页面前台和屏幕亮起。</span></label>
+          <label><input id="useSystemReminder" type="checkbox" /><span>系统预计提醒 · 预约后可离开页面，需要联网并允许通知。</span></label>
+          <label><input id="enableForegroundLocation" type="checkbox" /><span>可选前台定位。我同意仅在本机即时处理位置以判断定位质量；不上传、不保存经纬度或轨迹。拒绝不影响人工行程。</span></label>
+          <label><input id="simulationEntry" type="checkbox" /><span>独立模拟测试 · 不启用真实定位，定时推进仅为演示。</span></label>
+          <p>预计时间依据站间计划用时，可能受延误影响；人工过站可校正。请以广播和站牌为准。</p>
+        </div>
       </section>
       <section class="screen" id="trip">
-        <div class="card pwa-note" aria-live="polite">
-          <h3 id="tripWorkMode">本地人工进度 / 定位观察</h3>
-          <p id="foregroundLocationState">尚未启用定位</p><p id="locationAccuracy"></p>
-          <p>当前定位仅观察，不会自动推进。站点坐标系待核验；剩余用时为按人工进度计算的计划时长，不是实时 ETA。</p>
-          <button class="adjust" id="locationToggleBtn" type="button">启用前台定位</button>
-          <p id="effectStatus">正常模式尝试声音和震动；请先测试提醒。</p>
-          <p id="wakeStatus">请保持屏幕亮起。</p>
-          <p>仅支持网页前台提醒，不保证后台、锁屏或系统级闹钟必达。</p>
-        </div>
         <div class="hero trip-hero"><div class="trip-hero-top"><small id="tripLine">2号线 · 西桥方向</small><span class="trip-live"><i></i><span data-i18n="navActive">进行中</span></span></div><h2 id="tripTarget">准备下车｜长风街</h2><div class="trip-motion" id="tripMotion" aria-hidden="true"><span></span><i></i><i></i><i></i><b></b></div><div class="hero-row"><div class="metric"><strong id="stopsLeft">3</strong><span>站</span></div><div class="eta"><b id="etaText">约 8 分钟</b><div id="arrivalText">演示估算</div></div></div></div>
         <div class="trip-alert" id="tripAlertBanner" role="alert" aria-live="assertive" hidden><div class="trip-alert-icon"><span class="ui-icon icon-bell" aria-hidden="true"></span></div><div class="trip-alert-copy"><strong id="tripAlertTitle"></strong><span id="tripAlertMessage"></span></div><button class="trip-alert-dismiss" id="dismissAlertBtn" type="button" aria-label="关闭提醒"><span class="ui-icon icon-x" aria-hidden="true"></span></button></div>
         <div class="card"><div class="card-head"><div class="card-title" data-i18n="tripProgress">行程进度</div><span class="muted" id="updateTime" data-i18n="justUpdated">刚刚更新</span></div><div class="route-line" id="progressBar"></div><div class="route-stations"><span id="currentLabel">通达桥</span><b id="nextLabel">长风街</b></div><div class="timeline" id="timeline"></div><div class="simulation-control"><div class="simulation-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-play" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="simulationMode">模拟自动推进</b><span class="subline" data-i18n="simulationHint">仅用于前台演示，不代表实时列车位置</span></div></div><button class="switch" id="simulationToggle" type="button" aria-pressed="false"><i></i></button></div><div class="simulation-actions"><span class="simulation-status" id="simulationStatus" aria-live="polite">已暂停 · 演示不代表实时位置</span><label class="simulation-speed"><span data-i18n="simulationSpeed">推进速度</span><select class="compact-select" id="simulationSpeedSelect"></select></label></div></div><button class="adjust preview" id="previewAlertBtn" type="button"><span class="ui-icon icon-bell" aria-hidden="true"></span> <span data-i18n="previewArrival">预览到站提醒</span></button></div>
+        <div class="card pwa-note">
+          <h3>前台预计时间提醒</h3>
+          <p id="localEstimateStatus" class="push-status" role="status">尚未开启。</p>
+          <p>从最近人工确认时间估算，不自动过站；离开页面后暂停。请以广播和站牌为准。</p>
+          <button id="localEstimateToggle" class="adjust" type="button">关闭前台预计提醒</button>
+        </div>
+        <div class="card pwa-note">
+          <h3>页面外的预计提醒</h3>
+          <p id="pushTripStatus" class="push-status" role="status">本次尚未预约系统提醒。</p>
+          <p>需联网预约，不代表实际到站。</p>
+          <div class="push-controls"><button id="schedulePushBtn" class="adjust" type="button">预约预计提醒</button><button id="cancelPushBtn" class="adjust" type="button" hidden>取消预约</button></div>
+        </div>
+        <div class="card pwa-note" aria-live="polite">
+          <h3 id="tripWorkMode">本地人工进度 / 定位观察可选</h3>
+          <p id="foregroundLocationState">尚未启用定位</p><p id="locationAccuracy"></p>
+          <p>定位仅观察质量，不自动过站；离开页面后暂停。</p>
+          <button class="adjust" id="locationToggleBtn" type="button">启用前台定位</button>
+          <p id="effectStatus">正常模式尝试声音和震动；请先测试提醒。</p>
+          <p id="wakeStatus">请保持屏幕亮起。</p>
+        </div>
         <div class="confidence warn" id="confidenceBox"><i class="dot"></i><span><b>中等可信度</b> · 使用静态站序和演示时间估算</span></div>
         <div class="card"><div class="card-head"><div class="card-title" data-i18n="thisReminder">本次提醒</div><span class="muted" id="reminderSummary">提前 1 站</span></div><div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-bell" aria-hidden="true"></span></div><div class="row-copy"><b id="tripAlertModeLabel">弹窗 + 铃声</b><span class="subline" id="tripAlertModeHint">到站先弹窗，再播放铃声</span></div></div><span class="status-pill ok" id="tripAlertStatus">正常</span></div></div>
         <button class="adjust" id="endBtn" style="margin-top:12px" data-i18n="endTrip">结束本次行程</button>
@@ -1058,7 +1083,8 @@
           <div class="card settings-card">
             <button class="settings-row action" id="locationPermission" type="button"><span class="row-main"><span class="iconbox"><span class="ui-icon icon-pin" aria-hidden="true"></span></span><span class="row-copy"><b data-i18n="locationPermission">定位权限</b><span class="subline" data-i18n="locationPermissionHint">辅助判断所在区间</span></span></span><span class="status-pill" id="locationStatus" data-i18n="check">检查</span></button>
             <button class="settings-row action" id="notificationPermission" type="button"><span class="row-main"><span class="iconbox"><span class="ui-icon icon-bell" aria-hidden="true"></span></span><span class="row-copy"><b data-i18n="notificationPermission">通知权限</b><span class="subline" id="notificationPermissionHint" data-i18n="notificationPermissionHint">用于页面外的提醒提示</span></span></span><span class="status-pill" id="notificationStatus" data-i18n="check">检查</span></button>
-            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-monitor" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="backgroundLock">后台与锁屏提醒</b><span class="subline" data-i18n="backgroundLockHint">演示版建议保持前台运行</span></div></div><span class="status-pill warn" data-i18n="foregroundFirst">前台优先</span></div>
+            <div class="settings-row column"><p id="pushSettingsStatus" class="push-status" role="status">尚未开启系统通知。</p><div class="push-controls"><button id="testPushBtn" class="adjust" type="button" disabled>15 秒后测试系统通知</button><button id="disablePushBtn" class="adjust" type="button" hidden>关闭系统推送</button></div><p class="push-status">测试发送后可切到其他 App 查看。通知声音、锁屏展示由手机系统设置决定。</p></div>
+            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-monitor" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="backgroundLock">后台与锁屏提醒</b><span class="subline" data-i18n="backgroundLockHint">预约成功后可接收预计提醒，需要联网</span></div></div><span class="status-pill warn" data-i18n="foregroundFirst">预计提醒</span></div>
           </div>
         </div>
 
@@ -1075,7 +1101,7 @@
           <div class="card settings-card">
             <a class="settings-row settings-link" href="https://www.tymetro.ltd/" target="_blank" rel="noreferrer"><span class="row-main"><span class="iconbox"><span class="ui-icon icon-route" aria-hidden="true"></span></span><span class="row-copy"><b data-i18n="dataSource">线路数据来源</b><span class="subline" id="settingsDataSource">太原地铁官网静态数据</span></span></span><span class="chevron" aria-hidden="true"><span class="ui-icon icon-arrow"></span></span></a>
             <details class="settings-details"><summary class="settings-row"><span class="row-main"><span class="iconbox"><span class="ui-icon icon-help" aria-hidden="true"></span></span><span class="row-copy"><b data-i18n="howItWorks">提醒工作原理</b><span class="subline" data-i18n="howItWorksHint">预计提醒的依据与限制</span></span></span><span class="chevron" aria-hidden="true"><span class="ui-icon icon-arrow"></span></span></summary><p class="muted" data-i18n="howItWorksBody">到站啦会结合站序、计划用时和人工校正估算进度。当前版本不依赖隧道内定位，因此它是下车提示，不是系统闹钟。</p></details>
-            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-train" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="version">版本</b><span class="subline">0.5.0</span></div></div><span class="status-pill" data-i18n="localMode">本地版</span></div>
+            <div class="settings-row"><div class="row-main"><div class="iconbox"><span class="ui-icon icon-train" aria-hidden="true"></span></div><div class="row-copy"><b data-i18n="version">版本</b><span class="subline" id="releaseVersion">2026.09.23-integrated</span></div></div><span class="status-pill" data-i18n="localMode">本地版</span></div>
           </div>
         </div>
       </section>
@@ -1098,10 +1124,24 @@
       </section>
     </div>
     <div class="arrival-modal-layer" id="arrivalModalLayer" hidden><section class="arrival-modal" role="alertdialog" aria-modal="true" aria-labelledby="arrivalModalTitle" aria-describedby="arrivalModalMessage"><div class="arrival-mark" aria-hidden="true">到</div><h2 id="arrivalModalTitle"></h2><p id="arrivalModalMessage"></p><div class="arrival-meta" id="arrivalModalMeta"></div><div class="arrival-actions"><button class="arrival-later" id="arrivalDismissBtn" type="button" data-i18n="stayOnTrip">留在行程</button><button class="arrival-finish" id="arrivalFinishBtn" type="button" data-i18n="finishTrip">结束行程</button></div></section></div>
+    <div class="notification-layer" id="notificationLayer" hidden>
+      <section class="notification-dialog" role="dialog" aria-modal="true" aria-labelledby="notificationTitle" aria-describedby="notificationDescription notificationPromptStatus">
+        <div class="notification-symbol" aria-hidden="true"><span class="ui-icon icon-bell"></span></div>
+        <h2 id="notificationTitle">离开页面，也能收到提醒</h2>
+        <p id="notificationDescription">允许系统通知后，可为行程预约预计时间提醒。切到其他 App 时，也能通过手机通知查看；它不是实时到站判断。</p>
+        <p id="notificationPromptStatus" role="status">开启后请在系统提示中选择“允许”。</p>
+        <p class="notification-privacy">开启会向通知服务登记推送地址；预约时仅发送目的站、行程编号和提醒时间，不上传定位或轨迹。通知可能受网络、专注模式等影响。</p>
+        <button id="notificationEnableBtn" class="primary" type="button">开启系统通知</button>
+        <button id="notificationLaterBtn" class="notification-later" type="button">暂不开启</button>
+      </section>
+    </div>
   </section></main>
+  <script src="./pwa/config.js"></script>
   <script src="./pwa/core.js"></script>
+  <script src="./pwa/push-client.js"></script>
   <script src="./pwa/location-controller.js"></script>
   <script src="./pwa/trip-store.js"></script>
+  <script src="./pwa/estimated-reminder.js"></script>
   <script>
     const dictionaries={
       'zh-CN':{
@@ -1227,7 +1267,7 @@
       return focusTarget;
     }
     function openMobilePicker(select){
-      if(!select||select.disabled||!select.options.length||!$('arrivalModalLayer').hidden)return;
+      if(!select||select.disabled||!select.options.length||!$('arrivalModalLayer').hidden||!$('notificationLayer').hidden)return;
       if(activePickerSelect===select&&!$('pickerLayer').hidden)return;
       if(activePickerSelect)closeMobilePicker({restoreFocus:false});
       const config=pickerConfigs[select.id];
@@ -1389,19 +1429,20 @@
       $('arrivalModalMessage').textContent=trip.alertMessage||t('arrivalModalMessage');
       $('arrivalModalMeta').textContent=`${trip.lineName} · ${trip.direction.name} · 仅前台提醒`;
     }
-    function setAppInert(inert,activeLayerId='arrivalModalLayer'){document.querySelectorAll('.phone > *').forEach(element=>{element.inert=inert&&element.id!==activeLayerId;});}
+    function setAppInert(inert,activeLayerId='arrivalModalLayer'){if(!inert){const active=['arrivalModalLayer','notificationLayer','pickerLayer'].find(id=>!$(id).hidden);if(active){inert=true;activeLayerId=active;}}document.querySelectorAll('.phone > *').forEach(element=>{element.inert=inert&&element.id!==activeLayerId;});}
     function closeArrivalModal({restoreFocus=true}={}){
       clearTimeout(arrivalSoundTimer);arrivalSoundTimer=null;
       $('arrivalModalLayer').hidden=true;arrivalTrip=null;
       const pickerOpen=Boolean(activePickerSelect&&!$('pickerLayer').hidden);
       setAppInert(pickerOpen,pickerOpen?'pickerLayer':'arrivalModalLayer');
-      if(restoreFocus&&!pickerOpen){const target=arrivalReturnFocus?.isConnected&&!arrivalReturnFocus.disabled?arrivalReturnFocus:$('endBtn');target?.focus();}
+      if(restoreFocus&&!pickerOpen&&$('notificationLayer').hidden){const target=arrivalReturnFocus?.isConnected&&!arrivalReturnFocus.disabled&&!arrivalReturnFocus.closest('[hidden]')?arrivalReturnFocus:$('endBtn');target?.focus();}
       arrivalReturnFocus=null;
       stopAlertEffects();
       if(currentTrip&&!document.hidden&&!foregroundPaused)queueMicrotask(()=>{showTripAlert(currentTrip);locationController.retryAlert();});
     }
     function openArrivalModal(trip){
-      closeMobilePicker();
+      closeNotificationPrompt({restoreFocus:false});
+      closeMobilePicker({restoreFocus:false});
       if(simulationRunning)pauseSimulation({statusKey:currentTrip?.status==='arrived'?'simulationArrived':'simulationPaused'});
       clearTimeout(toast.timer);$('toast').classList.remove('show');clearTimeout(arrivalSoundTimer);hideTripAlert();arrivalTrip=trip;arrivalReturnFocus=document.activeElement;
       updateArrivalModal(trip);setAppInert(true,'arrivalModalLayer');$('arrivalModalLayer').hidden=false;
@@ -1410,6 +1451,7 @@
         trip.presented=true;
         $('arrivalDismissBtn').focus();
         if(trip.reminderKey){try{tripStore.markReminder(trip.reminderKey);}catch(error){$('storageStatus').textContent=error.message;}}
+        if(trip.estimateKey){estimatedReminder.markShown(trip.estimateKey);updateEstimatedStatus();}
         arrivalSoundTimer=setTimeout(()=>{if(!document.hidden&&arrivalTrip===trip){playAlertSound();vibrateAlert();}arrivalSoundTimer=null;},400);
       });
     }
@@ -1474,7 +1516,7 @@
     function setTargets(){const fromIndex=orderedStations.findIndex(station=>station.id===fromSelect.value);const possible=orderedStations.slice(Math.max(0,fromIndex+1));replaceSelectOptions(toSelect,possible.map(station=>({value:station.id,label:station.name})),possible[Math.min(5,possible.length-1)]?.id||'');updateHeroRoute();}
     async function restoreActiveTrip(){
       const result=tripStore.restore();
-      if(result.status==='saved'){renderTrip(result.trip);show('trip');showTripAlert(result.trip);toast(t('tripRestored'));}
+      if(result.status==='saved'){restoreEstimatedReminder(result.trip);renderTrip(result.trip);show('trip');showTripAlert(result.trip);toast(t('tripRestored'));}
       else if(result.status==='invalid')$('storageStatus').textContent=result.message;
     }
     async function loadData(){try{lines=DaozhanCore.offlineTrips.getLines();healthState={local:true};replaceSelectOptions(lineSelect,lines.map(line=>({value:line.id,label:`${line.name} · ${line.stations.length} 站`})),'2');updateDataSourceLabels();enableForm(true);setLine();await restoreActiveTrip();}catch(error){enableForm(false);$('storageStatus').textContent=`本地线路加载失败，请重新在线加载：${error.message}`;}}
@@ -1544,9 +1586,10 @@
     async function checkNotificationPermission({request=false}={}){const status=$('notificationStatus');if(!('Notification'in window)){setPermissionStatus(status,'permissionUnsupported','denied');if(request)toast(t('notificationUnavailable'));return;}let permission=Notification.permission;if(request&&permission==='default'){try{permission=await Notification.requestPermission();}catch{}}setPermissionStatus(status,permission==='granted'?'permissionGranted':permission==='denied'?'permissionDenied':'permissionPrompt',permission);if(request)toast(permission==='granted'?t('notificationPermissionUpdated'):t('notificationUnavailable'));}
     async function checkLocationPermission(){const status=$('locationStatus');if(!navigator.permissions?.query){setPermissionStatus(status,'permissionUnsupported','denied');return;}try{const result=await navigator.permissions.query({name:'geolocation'});setPermissionStatus(status,result.state==='granted'?'permissionGranted':result.state==='denied'?'permissionDenied':'permissionPrompt',result.state);}catch{setPermissionStatus(status,'permissionUnsupported','denied');}}
     async function endCurrentTrip(){
+      stopEstimatedReminder();closeNotificationPrompt({restoreFocus:false});
       locationWanted=false;locationController.stop();releaseWakeLock();closeArrivalModal({restoreFocus:false});tripGeneration++;
       clearSimulationTimer();simulationRunning=false;simulationStatusKey='simulationPaused';advanceInFlight=false;currentTrip=null;alertKey='';hideTripAlert();updateSimulationControls();show('home');
-      tripStore.end();updatePwaTripUI();toast(t('tripEnded'));
+      tripStore.end();updatePwaTripUI();void cancelPushTrip();toast(t('tripEnded'));
     }
     function handleArrivalModalKeys(event){
       if(event.key==='Escape'){event.preventDefault();closeArrivalModal();return;}
@@ -1588,9 +1631,10 @@
         $('startBtn').disabled=true;setStartButtonText('creatingTrip');
         const trip=tripStore.create({lineId:lineSelect.value,directionId:dirSelect.value,fromStationId:fromSelect.value,toStationId:toSelect.value,remindBefore:reminder},{simulation:$('simulationEntry').checked});
         if(generation!==tripGeneration)return;
-        alertKey='';hideTripAlert();renderTrip(trip);show('trip');if(trip.shouldRemind)showTripAlert(trip);else toast(t('tripCreated'));
+        startEstimatedReminder(trip);alertKey='';hideTripAlert();renderTrip(trip);show('trip');if(trip.shouldRemind)showTripAlert(trip);else toast(t('tripCreated'));
         requestWakeLock();
         if($('enableForegroundLocation').checked&&!tripStore.isSimulation()){locationWanted=true;locationController.start(trip.id);}
+        if($('useSystemReminder').checked)void scheduleCurrentPush();else updatePushTripStatus();
       }catch(error){if(generation===tripGeneration)toast(error.message);}finally{$('startBtn').disabled=false;setStartButtonText('startTrip');}
     };
     $('adjustBtn').onclick=()=>void advanceCurrentTrip('manual');

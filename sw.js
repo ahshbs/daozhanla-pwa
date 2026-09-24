@@ -1,9 +1,10 @@
 // Generated PWA shell cache. Location never runs in this worker.
 'use strict';
-const ASSETS=["assets/pwa/icon-180.png","assets/pwa/icon-192.png","assets/pwa/icon-512.png","icons/arrow-right.svg","icons/bell-ring.svg","icons/circle-check.svg","icons/circle-dot.svg","icons/circle-help.svg","icons/circle-plus.svg","icons/flag.svg","icons/history.svg","icons/languages.svg","icons/map-pin.svg","icons/monitor.svg","icons/moon.svg","icons/navigation.svg","icons/play.svg","icons/rotate-ccw.svg","icons/route.svg","icons/settings.svg","icons/sun.svg","icons/train-front.svg","icons/volume-2.svg","icons/x.svg","index.html","manifest.webmanifest","pwa/app.js","pwa/core.js","pwa/location-controller.js","pwa/trip-store.js"];
+const ASSETS=["assets/pwa/icon-180.png","assets/pwa/icon-192.png","assets/pwa/icon-512.png","icons/arrow-right.svg","icons/bell-ring.svg","icons/circle-check.svg","icons/circle-dot.svg","icons/circle-help.svg","icons/circle-plus.svg","icons/flag.svg","icons/history.svg","icons/languages.svg","icons/map-pin.svg","icons/monitor.svg","icons/moon.svg","icons/navigation.svg","icons/play.svg","icons/rotate-ccw.svg","icons/route.svg","icons/settings.svg","icons/sun.svg","icons/train-front.svg","icons/volume-2.svg","icons/x.svg","index.html","manifest.webmanifest","pwa/app.js","pwa/config.js","pwa/core.js","pwa/estimated-reminder.js","pwa/location-controller.js","pwa/push-client.js","pwa/push-worker.js","pwa/trip-store.js"];
 const BASE=new URL('./',self.location.href);
+importScripts(new URL('pwa/push-worker.js',BASE).href);
 const CACHE_PREFIX='daozhanla-pwa-shell-'+encodeURIComponent(BASE.pathname)+'-';
-const CACHE_NAME=CACHE_PREFIX+"c47099a7f66d03be42dd";
+const CACHE_NAME=CACHE_PREFIX+"45f570d86565edb1c678";
 const URLS=ASSETS.map(file=>new URL(file,BASE).href);
 const SHELL=new Set(URLS);
 self.addEventListener('install',event=>{
