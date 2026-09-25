@@ -12,6 +12,87 @@ const estimatedReminder = DaozhanEstimate.createEstimatedReminder({
   storage: { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value), removeItem: key => localStorage.removeItem(key) }
 });
 let estimateTimer = null;
+const CORRECTION_STORAGE_PREFIX = 'daozhanla.field-corrections.v1.';
+let correctionTripId = '', correctionRecords = [];
+
+function correctionStorageKey(tripId) {
+  return CORRECTION_STORAGE_PREFIX + encodeURIComponent(String(tripId));
+}
+
+function loadCorrectionRecords(trip) {
+  correctionTripId = trip?.id || '';
+  correctionRecords = [];
+  if (!correctionTripId) return;
+  try {
+    const value = JSON.parse(localStorage.getItem(correctionStorageKey(correctionTripId)) || '[]');
+    if (Array.isArray(value)) correctionRecords = value.filter(record => record && typeof record === 'object'
+      && typeof record.from === 'string' && typeof record.to === 'string'
+      && Number.isSafeInteger(record.confirmedAt) && Number.isSafeInteger(record.plannedSeconds)
+      && Number.isSafeInteger(record.actualSeconds) && Number.isSafeInteger(record.deltaSeconds)).slice(-64);
+  } catch {}
+}
+
+function saveCorrectionRecords() {
+  if (!correctionTripId) return;
+  try { localStorage.setItem(correctionStorageKey(correctionTripId), JSON.stringify(correctionRecords)); }
+  catch { /* The trip itself remains usable when the optional log cannot be saved. */ }
+}
+
+function formatCorrectionDelta(seconds) {
+  if (seconds === 0) return '与计划一致';
+  return seconds > 0 ? `晚 ${seconds} 秒` : `早 ${Math.abs(seconds)} 秒`;
+}
+
+function formatCorrectionClock(timestamp) {
+  return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function renderCorrectionLog() {
+  const summary = $('correctionSummary'), log = $('correctionLog');
+  if (!summary || !log) return;
+  log.replaceChildren();
+  if (!correctionRecords.length) {
+    summary.textContent = '尚未记录本次行程的实际站间用时。';
+    return;
+  }
+  const totalDelta = correctionRecords.reduce((sum, record) => sum + record.deltaSeconds, 0);
+  const averageDelta = Math.round(totalDelta / correctionRecords.length);
+  const last = correctionRecords.at(-1);
+  summary.textContent = `已记录 ${correctionRecords.length} 段；平均偏差 ${formatCorrectionDelta(averageDelta)}。最近一段 ${last.from} → ${last.to}：${formatCorrectionDelta(last.deltaSeconds)}。后续预计已按本次确认时间重算。`;
+  correctionRecords.forEach((record, index) => {
+    const line = document.createElement('p');
+    line.textContent = `${index + 1}. ${record.from} → ${record.to} · 实际 ${record.actualSeconds} 秒 / 计划 ${record.plannedSeconds} 秒 · ${formatCorrectionDelta(record.deltaSeconds)} · ${formatCorrectionClock(record.confirmedAt)}`;
+    log.append(line);
+  });
+}
+
+function attachCorrectionLog(trip) {
+  if (!trip?.id) return;
+  if (correctionTripId !== trip.id) loadCorrectionRecords(trip);
+  renderCorrectionLog();
+}
+
+function recordManualCorrection(before, after, confirmedAt) {
+  if (!before || !after || before.status !== 'active' || before.currentIndex === after.currentIndex
+    || !before.currentStation || !Number.isInteger(before.currentStation.secondsToNext)) return;
+  const anchor = Date.parse(before.updatedAt);
+  const plannedSeconds = before.currentStation.secondsToNext;
+  const actualSeconds = Number.isSafeInteger(anchor) ? Math.max(0, Math.round((confirmedAt - anchor) / 1000)) : 0;
+  const record = {
+    from: before.currentStation.name,
+    to: after.currentStation.name,
+    confirmedAt,
+    plannedSeconds,
+    actualSeconds,
+    deltaSeconds: actualSeconds - plannedSeconds
+  };
+  if (correctionTripId !== before.id) loadCorrectionRecords(before);
+  correctionRecords.push(record);
+  correctionRecords = correctionRecords.slice(-64);
+  saveCorrectionRecords();
+  renderCorrectionLog();
+}
+
 function clearEstimateTimer() { clearTimeout(estimateTimer); estimateTimer = null; }
 function updateEstimatedStatus() {
   const state = estimatedReminder.snapshot();
@@ -350,8 +431,11 @@ $('useSystemReminder').onchange = () => { if ($('useSystemReminder').checked) { 
 const originalAdvanceCurrentTrip = advanceCurrentTrip;
 advanceCurrentTrip = async function (source) {
   const before = currentTrip;
+  const confirmedAt = Date.now();
   await originalAdvanceCurrentTrip(source);
   if (currentTrip?.id === before?.id && currentTrip?.currentIndex !== before?.currentIndex) {
+    attachCorrectionLog(currentTrip);
+    if (source === 'manual') recordManualCorrection(before, currentTrip, confirmedAt);
     estimatedReminder.attach(currentTrip, { simulation: tripStore.isSimulation() });
     updateEstimatedStatus(); scheduleEstimateTick();
     if (currentTrip.status === 'arrived') await cancelPushTrip();
@@ -362,7 +446,7 @@ advanceCurrentTrip = async function (source) {
 const originalSetAlertMode = setAlertMode;
 setAlertMode = function (mode) { originalSetAlertMode(mode); if (mode === 'silent') void cancelPushTrip(); displayPushState(pushState); };
 const originalRenderTrip = renderTrip;
-renderTrip = function (trip) { originalRenderTrip(trip); updatePushTripStatus(); updateEstimatedStatus(); };
+renderTrip = function (trip) { originalRenderTrip(trip); attachCorrectionLog(trip); updatePushTripStatus(); updateEstimatedStatus(); };
 window.addEventListener('online', () => void reconcilePush());
 window.addEventListener('pageshow', () => void reconcilePush());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void reconcilePush(); });

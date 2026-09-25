@@ -1025,6 +1025,12 @@
           <p>从最近人工确认时间估算，不自动过站；离开页面后暂停。请以广播和站牌为准。</p>
           <button id="localEstimateToggle" class="adjust" type="button">关闭前台预计提醒</button>
         </div>
+        <div class="card pwa-note" id="correctionCard">
+          <h3>实地校正记录</h3>
+          <p id="correctionStatus" class="push-status" role="status">每到一站先核对广播或站牌，再点击“我刚刚经过一站”。</p>
+          <p id="correctionSummary">尚未记录本次行程的实际站间用时。</p>
+          <div id="correctionLog" aria-live="polite"></div>
+        </div>
         <div class="card pwa-note">
           <h3>页面外的预计提醒</h3>
           <p id="pushTripStatus" class="push-status" role="status">本次尚未预约系统提醒。</p>
