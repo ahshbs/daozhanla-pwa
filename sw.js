@@ -4,7 +4,7 @@ const ASSETS=["assets/pwa/icon-180.png","assets/pwa/icon-192.png","assets/pwa/ic
 const BASE=new URL('./',self.location.href);
 importScripts(new URL('pwa/push-worker.js',BASE).href);
 const CACHE_PREFIX='daozhanla-pwa-shell-'+encodeURIComponent(BASE.pathname)+'-';
-const CACHE_NAME=CACHE_PREFIX+"28157dd34aa65974d8d7";
+const CACHE_NAME=CACHE_PREFIX+"7114097097c85c44eae6";
 const URLS=ASSETS.map(file=>new URL(file,BASE).href);
 const SHELL=new Set(URLS);
 self.addEventListener('install',event=>{

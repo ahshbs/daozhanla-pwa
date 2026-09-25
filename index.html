@@ -1102,6 +1102,19 @@
           </div>
         </div>
 
+        <div class="settings-section" id="fieldTestSection">
+          <div class="section-label">实地测试</div>
+          <div class="card settings-card" id="testResultsCard">
+            <div class="settings-row column">
+              <div class="row-main"><div class="iconbox"><span class="ui-icon icon-history" aria-hidden="true"></span></div><div class="row-copy"><b>测试结果</b><span class="subline">结束行程后保存；明显偏差可以删除，不会上传定位。</span></div></div>
+              <p id="testResultsSummary" class="push-status" role="status">还没有已保存的实地测试。</p>
+              <div id="testResultsList" aria-live="polite"></div>
+              <div class="push-controls"><button id="copyTestResultsBtn" class="adjust" type="button">复制全部测试结果</button><button id="clearTestResultsBtn" class="adjust" type="button">清空全部结果</button></div>
+              <p class="push-status">正式版发布前，将 pwa/config.js 的 fieldTestMode 改为 false 后重新构建即可隐藏此区域。</p>
+            </div>
+          </div>
+        </div>
+
         <div class="settings-section">
           <div class="section-label" data-i18n="about">关于</div>
           <div class="card settings-card">

@@ -4,5 +4,7 @@
 // PUSH_PUBLIC_ORIGIN on that server to exactly match this page's origin.
 window.DAOZHAN_CONFIG = Object.freeze({
   release: '2026.09.25-push-test',
-  pushApiBase: 'https://appreciated-import-skating-patio.trycloudflare.com/api/v1/push'
+  pushApiBase: 'https://appreciated-import-skating-patio.trycloudflare.com/api/v1/push',
+  // Set false before a formal release to hide the local field-test ledger.
+  fieldTestMode: true
 });

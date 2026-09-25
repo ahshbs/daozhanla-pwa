@@ -13,7 +13,10 @@ const estimatedReminder = DaozhanEstimate.createEstimatedReminder({
 });
 let estimateTimer = null;
 const CORRECTION_STORAGE_PREFIX = 'daozhanla.field-corrections.v1.';
+const TEST_RESULTS_KEY = 'daozhanla.field-test-results.v1';
+const FIELD_TEST_MODE = window.DAOZHAN_CONFIG?.fieldTestMode !== false;
 let correctionTripId = '', correctionRecords = [];
+let testResults = [], discardNextTestResult = false;
 
 function correctionStorageKey(tripId) {
   return CORRECTION_STORAGE_PREFIX + encodeURIComponent(String(tripId));
@@ -36,6 +39,105 @@ function saveCorrectionRecords() {
   if (!correctionTripId) return;
   try { localStorage.setItem(correctionStorageKey(correctionTripId), JSON.stringify(correctionRecords)); }
   catch { /* The trip itself remains usable when the optional log cannot be saved. */ }
+}
+
+function loadTestResults() {
+  testResults = [];
+  if (!FIELD_TEST_MODE) return;
+  try {
+    const value = JSON.parse(localStorage.getItem(TEST_RESULTS_KEY) || '[]');
+    if (Array.isArray(value)) testResults = value.filter(result => result && typeof result === 'object'
+      && typeof result.id === 'string' && typeof result.lineName === 'string'
+      && typeof result.createdAt === 'string' && Number.isSafeInteger(result.endedAt)
+      && Array.isArray(result.records)
+      && result.records.every(record => record && typeof record.from === 'string' && typeof record.to === 'string'
+        && Number.isSafeInteger(record.confirmedAt) && Number.isSafeInteger(record.plannedSeconds)
+        && Number.isSafeInteger(record.actualSeconds) && Number.isSafeInteger(record.deltaSeconds))).slice(0, 50);
+  } catch {}
+}
+
+function saveTestResults() {
+  if (!FIELD_TEST_MODE) return true;
+  try {
+    localStorage.setItem(TEST_RESULTS_KEY, JSON.stringify(testResults.slice(0, 50)));
+    return true;
+  } catch {
+    toast('测试结果无法保存到本机，但当前行程仍可继续。');
+    return false;
+  }
+}
+
+function testResultLabel(result) {
+  if (!result.records.length) return '无校正记录';
+  const obvious = result.records.some(record => Math.abs(record.deltaSeconds) > 90
+    || record.actualSeconds < Math.max(10, Math.round(record.plannedSeconds * 0.5)));
+  return obvious ? '疑似误触或明显偏差' : '可保留';
+}
+
+function testResultText(result) {
+  const date = new Date(result.endedAt).toLocaleString('zh-CN', { hour12: false });
+  const records = result.records.map((record, index) =>
+    `${index + 1}. ${record.from} -> ${record.to}: 实际 ${record.actualSeconds} 秒 / 计划 ${record.plannedSeconds} 秒 / ${formatCorrectionDelta(record.deltaSeconds)}`);
+  return `${date} | ${result.lineName} ${result.directionName} | ${result.from} -> ${result.to} | 提前${result.remindBefore}站\n${records.join('\n') || '没有逐站校正记录'}`;
+}
+
+function renderTestResults() {
+  const section = $('fieldTestSection'), summary = $('testResultsSummary'), list = $('testResultsList');
+  if (!section || !summary || !list) return;
+  section.hidden = !FIELD_TEST_MODE;
+  if (!FIELD_TEST_MODE) return;
+  list.replaceChildren();
+  if (!testResults.length) {
+    summary.textContent = '还没有已保存的实地测试。';
+    return;
+  }
+  const deltas = testResults.flatMap(result => result.records.map(record => record.deltaSeconds));
+  const average = deltas.length ? Math.round(deltas.reduce((sum, value) => sum + value, 0) / deltas.length) : null;
+  const averageText = average === null ? '暂无可计算偏差' : formatCorrectionDelta(average);
+  summary.textContent = `已保存 ${testResults.length} 次测试、${deltas.length} 段校正；总体平均偏差 ${averageText}。可删除疑似误触记录后再复制提交。`;
+  testResults.forEach(result => {
+    const row = document.createElement('div'); row.className = 'history-item';
+    const copy = document.createElement('div'); copy.style.flex = '1';
+    const title = document.createElement('b'); title.textContent = `${result.from} → ${result.to} · ${new Date(result.endedAt).toLocaleDateString('zh-CN')}`;
+    const detail = document.createElement('p'); detail.textContent = `${result.records.length} 段 · ${testResultLabel(result)} · ${result.directionName}`;
+    copy.append(title, detail);
+    const remove = document.createElement('button'); remove.className = 'text-button danger'; remove.type = 'button'; remove.textContent = '删除';
+    remove.onclick = () => { testResults = testResults.filter(item => item.id !== result.id); saveTestResults(); renderTestResults(); };
+    row.append(copy, remove); list.append(row);
+    result.records.forEach((record, index) => {
+      const recordRow = document.createElement('div'); recordRow.className = 'history-item';
+      recordRow.style.paddingLeft = '12px';
+      const recordCopy = document.createElement('div'); recordCopy.style.flex = '1';
+      const recordText = document.createElement('p');
+      recordText.textContent = `${index + 1}. ${record.from} → ${record.to} · 实际 ${record.actualSeconds} 秒 / 计划 ${record.plannedSeconds} 秒 · ${formatCorrectionDelta(record.deltaSeconds)}`;
+      recordCopy.append(recordText);
+      const removeRecord = document.createElement('button'); removeRecord.className = 'text-button danger'; removeRecord.type = 'button'; removeRecord.textContent = '删此段';
+      removeRecord.onclick = () => {
+        result.records = result.records.filter((_, recordIndex) => recordIndex !== index);
+        saveTestResults(); renderTestResults();
+      };
+      recordRow.append(recordCopy, removeRecord); list.append(recordRow);
+    });
+  });
+}
+
+function saveCompletedTestResult(trip, endedAt) {
+  if (!FIELD_TEST_MODE || !trip) return;
+  const result = {
+    id: `${trip.id}:${endedAt}`,
+    endedAt,
+    createdAt: trip.createdAt,
+    lineName: trip.lineName,
+    directionName: trip.direction?.name || '',
+    from: trip.route?.[0]?.name || '',
+    to: trip.route?.at(-1)?.name || '',
+    remindBefore: trip.remindBefore,
+    records: (Array.isArray(trip.records) ? trip.records : correctionRecords).map(record => ({ ...record }))
+  };
+  testResults.unshift(result); testResults = testResults.slice(0, 50);
+  const saved = saveTestResults();
+  renderTestResults();
+  return saved;
 }
 
 function formatCorrectionDelta(seconds) {
@@ -231,7 +333,7 @@ function resumeForeground() {
   foregroundPaused = false;
   if (!currentTrip) return;
   try { DaozhanCore.fieldStorage.validateRecoveryTrip(currentTrip); }
-  catch (error) { locationWanted = false; locationController.stop(); pauseSimulation(); void endCurrentTrip(); $('storageStatus').textContent = error.message; return; }
+  catch (error) { locationWanted = false; locationController.stop(); pauseSimulation(); discardNextTestResult = true; void endCurrentTrip(); $('storageStatus').textContent = error.message; return; }
   if (locationWanted && !tripStore.isSimulation() && currentTrip.status === 'active') locationController.resume();
   requestWakeLock();
   showTripAlert(currentTrip);
@@ -293,7 +395,12 @@ $('locationToggleBtn').onclick = toggleForegroundLocation;
 $('locationPermission').onclick = toggleForegroundLocation;
 $('notificationPermission').onclick = () => toast('只使用前台弹窗；不保证后台、锁屏提醒');
 $('notificationStatus').textContent = '仅前台';
-$('clearLocalTripBtn').onclick = () => { if (window.confirm('清除本机当前行程与已展示提醒状态？偏好不删除；本应用不保存定位轨迹。')) void endCurrentTrip(); };
+$('clearLocalTripBtn').onclick = () => {
+  if (window.confirm('清除本机当前行程与校正记录？这次测试不会进入结果统计。偏好不删除；本应用不保存定位轨迹。')) {
+    discardNextTestResult = true;
+    void endCurrentTrip();
+  }
+};
 $('simulationEntry').onchange = () => { const simulation = $('simulationEntry').checked; $('enableForegroundLocation').disabled = simulation; $('useLocalReminder').disabled = simulation; $('useSystemReminder').disabled = simulation; if (simulation) { $('enableForegroundLocation').checked = false; $('useSystemReminder').checked = false; } };
 document.addEventListener('visibilitychange', () => document.hidden ? pauseForeground() : resumeForeground());
 window.addEventListener('pagehide', pauseForeground);
@@ -431,6 +538,19 @@ $('useSystemReminder').onchange = () => { if ($('useSystemReminder').checked) { 
 const originalAdvanceCurrentTrip = advanceCurrentTrip;
 advanceCurrentTrip = async function (source) {
   const before = currentTrip;
+  if (source === 'manual' && before?.status === 'active') {
+    const anchor = Date.parse(before.updatedAt);
+    const plannedSeconds = before.currentStation?.secondsToNext;
+    const elapsedSeconds = Number.isSafeInteger(anchor)
+      ? Math.max(0, Math.round((Date.now() - anchor) / 1000))
+      : 0;
+    const suspicious = Number.isInteger(plannedSeconds)
+      && plannedSeconds > 0
+      && elapsedSeconds < Math.max(10, Math.round(plannedSeconds * 0.5));
+    if (suspicious && !window.confirm(
+      `距离上一站确认仅过去 ${elapsedSeconds} 秒，计划站间时间约 ${plannedSeconds} 秒。确认真的到达下一站吗？`
+    )) return;
+  }
   const confirmedAt = Date.now();
   await originalAdvanceCurrentTrip(source);
   if (currentTrip?.id === before?.id && currentTrip?.currentIndex !== before?.currentIndex) {
@@ -443,16 +563,65 @@ advanceCurrentTrip = async function (source) {
   }
   updatePushTripStatus();
 };
+const originalEndCurrentTrip = endCurrentTrip;
+endCurrentTrip = async function () {
+  const tripBeforeEnd = currentTrip;
+  const recordsBeforeEnd = correctionRecords.map(record => ({ ...record }));
+  const simulationBeforeEnd = tripStore.isSimulation();
+  const endedAt = Date.now();
+  const discard = discardNextTestResult;
+  discardNextTestResult = false;
+
+  await originalEndCurrentTrip();
+
+  let testResultSaved = true;
+  if (!discard && tripBeforeEnd && !simulationBeforeEnd) {
+    testResultSaved = saveCompletedTestResult(
+      { ...tripBeforeEnd, records: recordsBeforeEnd },
+      endedAt
+    );
+  }
+  if ((discard || testResultSaved) && tripBeforeEnd?.id) {
+    try { localStorage.removeItem(correctionStorageKey(tripBeforeEnd.id)); } catch {}
+  }
+  correctionTripId = '';
+  correctionRecords = [];
+};
 const originalSetAlertMode = setAlertMode;
 setAlertMode = function (mode) { originalSetAlertMode(mode); if (mode === 'silent') void cancelPushTrip(); displayPushState(pushState); };
 const originalRenderTrip = renderTrip;
 renderTrip = function (trip) { originalRenderTrip(trip); attachCorrectionLog(trip); updatePushTripStatus(); updateEstimatedStatus(); };
+
+// These handlers were assigned by index.html before the optional PWA layer
+// loaded. Rebind them so the field-test ledger also sees a normal finish.
+$('arrivalFinishBtn').onclick = () => void endCurrentTrip();
+$('endBtn').onclick = () => void endCurrentTrip();
+
+$('copyTestResultsBtn').onclick = async () => {
+  const text = testResults.map(testResultText).join('\n\n');
+  if (!text) { toast('还没有可复制的测试结果。'); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('测试结果已复制，可统一提交。');
+  } catch {
+    toast('复制失败，请截图保存测试结果。');
+  }
+};
+$('clearTestResultsBtn').onclick = () => {
+  if (!testResults.length) return;
+  if (!window.confirm('清空全部实地测试结果？此操作无法恢复。')) return;
+  testResults = [];
+  saveTestResults();
+  renderTestResults();
+  toast('测试结果已清空。');
+};
 window.addEventListener('online', () => void reconcilePush());
 window.addEventListener('pageshow', () => void reconcilePush());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void reconcilePush(); });
 // Initialize only once every optional controller and modal callback is ready;
 // restore can synchronously render a trip and its pending manual reminder.
 $('releaseVersion').textContent = window.DAOZHAN_CONFIG?.release || '2026.09.23-integrated';
+loadTestResults(); renderTestResults();
 setupMobileSelects(); applyTheme(); applyLanguage(); updateSwitches(); loadData(); setupOfflineCache();
 setTimeout(() => {
   void reconcilePush();
